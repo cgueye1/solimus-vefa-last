@@ -1,0 +1,19 @@
+package com.wakana.vefa.model;
+import jakarta.persistence.*;
+import lombok.Data;
+
+@Data
+@Entity
+@Table(name = "solimus_jobs")
+public class SolimusJobs{
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String icon;
+  
+  
+    
+}
+

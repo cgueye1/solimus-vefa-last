@@ -1,0 +1,120 @@
+package com.wakana.vefa.controller;
+
+import com.wakana.vefa.model.PaymentCall;
+import com.wakana.vefa.services.PaymentCallService;
+import com.wakana.vefa.util.FileTraferUtil;
+import io.jsonwebtoken.io.IOException;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import com.wakana.vefa.dto.PaymentCallRequest;
+import com.wakana.vefa.dto.response.CallForChargeKpiResponse;
+import com.wakana.vefa.dto.response.PaymentCallKpiDto;
+
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.List;
+import java.util.Optional;
+
+@RestController
+@RequestMapping("/api/payment-calls")
+@RequiredArgsConstructor
+public class PaymentCallController {
+
+    private final PaymentCallService paymentCallService;
+
+    @GetMapping("/property/{propertyId}")
+    public List<PaymentCall> getPaymentCallsByProperty(@PathVariable Long propertyId) {
+        return paymentCallService.getPaymentCallsForProperty(propertyId);
+    }
+
+    @PostMapping
+    public PaymentCall createPaymentCall(@RequestBody PaymentCallRequest paymentCallRequest) {
+        return paymentCallService.createPaymentCall(paymentCallRequest);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<PaymentCall> updatePaymentCall(@PathVariable Long id,
+            @RequestBody PaymentCallRequest paymentCallRequest) {
+        Optional<PaymentCall> updatedPaymentCall = paymentCallService.updatePaymentCall(id, paymentCallRequest);
+        return updatedPaymentCall.map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    // Endpoint to simulate payment status and return overdue payments and total
+    // amount
+    @GetMapping("/simulate-payments/{id}")
+    public ResponseEntity<Map<String, Object>> simulatePayments(@PathVariable Long id) {
+        try {
+            Map<String, Object> result = paymentCallService.simulatePayments(id);
+            return ResponseEntity.ok(result);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public void deletePaymentCall(@PathVariable Long id) {
+        paymentCallService.deletePaymentCall(id);
+    }
+
+    @PostMapping("/{id}/file")
+    public ResponseEntity<?> save(@ModelAttribute PaymentCallRequest request, @PathVariable Long id)
+            throws java.io.IOException {
+        try {
+
+            String file = FileTraferUtil.handleFileUpload(request.getFile());
+
+            request.setFileName(file);
+
+            return ResponseEntity.ok(paymentCallService.addFile(id, request));
+
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Échec d'enregistrement : " + e.getMessage());
+        }
+    }
+
+
+    @GetMapping("/kpi")
+    public ResponseEntity<CallForChargeKpiResponse> getKpis(
+            @RequestParam(required = false) Long promoterId,
+            @RequestParam(required = false) Long propertyId,
+            @RequestParam(required = true) String planName
+
+    ) {
+
+        if (promoterId != null) {
+            return ResponseEntity.ok(paymentCallService.getKpiByPromoter(promoterId, planName));
+        } else if (propertyId != null) {
+            return ResponseEntity.ok(paymentCallService.getKpiByParentProperty(propertyId));
+        } else {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    
+    
+     /**
+     * Exemple :
+     * PUT /api/payment-calls/12/status?status=PAID
+     */
+    @PutMapping("/{id}/status")
+    public ResponseEntity<PaymentCall> updateStatus(
+            @PathVariable Long id,
+            @RequestParam String status
+    ) {
+        return ResponseEntity.ok(
+                paymentCallService.updateStatus(id, status)
+        );
+    }
+    
+    
+    
+    @GetMapping("/{propertyId}/kpi")
+    public PaymentCallKpiDto getKpis(@PathVariable Long propertyId) {
+        return   paymentCallService.getPaymentCallKpis(propertyId);
+    }
+}

@@ -1,0 +1,62 @@
+
+
+
+
+source ~/.bash_profile
+mvn spring-boot:run
+
+docker build -t solimus/vefa .
+
+save and send 
+docker save -o vefa.tar solimus/vefa:latest
+
+scp  vefa.tar  root@94.176.182.149:/
+
+password : MGe21bc203b6feb4a38bc5a5daa7f540a3
+
+zDkyUvJ79yjg84S#
+
+
+
+
+
+
+
+Connexion
+#####ssh -p 22  root@95.169.201.95 
+ssh -p 22  root@94.176.182.149
+
+
+
+
+load on serveur
+docker load -i /vefa.tar 
+ 
+run
+
+
+docker run -d -p 8082:8082 \
+  -v /etc/letsencrypt/live/solimus.sn/server.p12:/certs/vefa/server.p12 \
+  --name vefa \
+  solimus/vefa:latest
+  
+  docker run  -p 8082:8082 \
+  -v /etc/letsencrypt/live/solimus.sn/server.p12:/certs/vefa/server.p12 \
+  --name vefa \
+  solimus/vefa:latest
+
+docker run -d -p 8082:8082 \
+  -v /etc/letsencrypt/live/solimus.sn/server.p12:/certs/vefa/server.p12 \
+    -v /application.properties:/app/application.properties \
+  --name vefa \
+  solimus/vefa:latest
+
+docker stop  vefa
+docker rm  vefa
+
+
+
+
+
+scp -r root@94.176.182.149:/ter ~/Downloads/ter
+
