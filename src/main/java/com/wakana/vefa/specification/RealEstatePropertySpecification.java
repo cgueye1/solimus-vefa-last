@@ -87,13 +87,10 @@ public class RealEstatePropertySpecification {
         return (root, query, criteriaBuilder) -> criteriaBuilder.isNull(root.get("parentProperty"));
     }
 
-    // Méthode pour vérifier que status est soit null soit 'AVAILABLE'
+    // La disponibilité métier est portée par le statut enum.
     public static Specification<RealEstateProperty> hasAvailableStatus() {
-        return (root, query, criteriaBuilder) -> {
-            return criteriaBuilder.or(
-                    criteriaBuilder.isNull(root.get("status")),
-                    criteriaBuilder.equal(root.get("status"), RealEstatePropertyStatusEnum.AVAILABLE));
-        };
+        return (root, query, criteriaBuilder) -> criteriaBuilder.equal(
+                root.get("status"), RealEstatePropertyStatusEnum.AVAILABLE);
     }
 
     public static Specification<RealEstateProperty> hasNameContaining(String name) {

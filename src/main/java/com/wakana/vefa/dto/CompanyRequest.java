@@ -9,6 +9,9 @@ public class CompanyRequest {
 
     private Long id;
     private String name;
+    private String address;
+    private String registrationNumber;
+    private String ninea;
     private String primaryColor;
     private String secondaryColor;
     private MultipartFile logo;

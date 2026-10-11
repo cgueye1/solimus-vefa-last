@@ -24,6 +24,9 @@ public class CompanyServiceImpl implements CompanyService {
         Company existingCompany = companyRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Company not found with id: " + id));
         existingCompany.setName(company.getName());
+        existingCompany.setAddress(company.getAddress());
+        existingCompany.setRegistrationNumber(company.getRegistrationNumber());
+        existingCompany.setNinea(company.getNinea());
         existingCompany.setPrimaryColor(company.getPrimaryColor());
         existingCompany.setSecondaryColor(company.getSecondaryColor());
         if (logo != null && !logo.isEmpty()) {

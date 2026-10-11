@@ -1,6 +1,5 @@
 package com.wakana.vefa.config;
 
-import jakarta.servlet.Filter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,18 +9,21 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 
 import com.wakana.vefa.services.UserSeervice;
 
-import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfiguration {
 
@@ -35,64 +37,34 @@ public class SecurityConfiguration {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/api/v1/auth/**",
-                                "/api/files/**",
-                                "/api/job-requests/**",
-                                "/api/notifications/**",
-                                "/api/rental-invoices/**",
-                                "/api/rapports/**",
-                                "/api/works/**",
-                                "/api/payments-historics/**",
-                                "/api/rental-contracts/**",
-
-                                "/api/jobs/**",
-                                "/api/ownerpropertyare/**",
-                                "/api/call-for-charges/**",
-                                "/api/actu/**",
-                                "/api/gare/**",
-                                "/api/otp/**",
-                                "/api/meets/**",
-                                "/api/peytech/**",
-                                "/ipn/**",
-                                "/api/v1/vod/**",
-                                "/chat/**",
-
-                                "/api/files/**",
-
-                                "/api/docs/**",
-                                "/api/otp/**",
-                                "/api/dashboard/commercial/**",
-                                "/api/dashboard/financier/**",
-                                //"/api/properties-v2/**",
-
-                                "/api/messages/**",
-                                "/api/subscriptions-plans/**",
-                                "/api/subscriptions/**",
-                                "/api/user-subscriptions/**",
-                                "/api/companies/**",
-                                "/api/indicators/**",
-                                "/api/information-sheets/**",
-                                "/api/progress-album/**",
-                                "/api/payment-calls/**",
-                                "/api/subscription-plan-types/**",
-                                "/api/realestate/**",
-                                "/api/reservations/**",
-                                "/api/property-types/**",
-                                "/api/v1/notifications/**",
-                                "/api/notifications/**",
-                                "/api/zone/**",
-                                "/api/fare/**",
-                                "/chat-websocket/**",
-                                "/ws/**",
-                                "/swagger-ui/**",
-                                "/swagger-resources/**",
-                                "/v3/api-docs/**",
-
-                                "/api/v1/parameters/**",
-                                "/api/v1/user/**")
+                    "/api/v1/auth/signup",
+                    "/api/v1/auth/signin",
+                    "/api/v1/auth/refresh",
+                    "/api/v1/auth/password/reset",
+                    "/swagger-ui/**",
+                    "/swagger-resources/**",
+                    "/v3/api-docs/**")
+                .permitAll()
+                .requestMatchers(HttpMethod.GET,
+                    "/api/files/**",
+                    "/api/property-types/**",
+                    "/api/v1/parameters/**",
+                    "/api/v1/user/user-count",
+                    "/api/v1/user/users/statistics",
+                    "/api/subscriptions-plans/**")
+                        .permitAll()
+                .requestMatchers(HttpMethod.POST,
+                    "/api/otp/send",
+                    "/api/otp/validate",
+                    "/api/realestate/search-portail",
+                    "/api/realestate/rental/search-portail",
+                    "/api/realestate/search-lot-by-parent")
                         .permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                    .authenticationEntryPoint((request, response, exception) ->
+                        response.sendError(HttpStatus.UNAUTHORIZED.value(), "Authentication required")))
                 .authenticationProvider(authenticationProvider())
                 // .addFilterBefore(subscriptionFilter,
                 // UsernamePasswordAuthenticationFilter.class)

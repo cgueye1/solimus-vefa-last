@@ -26,6 +26,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
+import com.wakana.vefa.model.User;
 
 @RestController
 @RequestMapping("/api/realestate")
@@ -35,6 +38,7 @@ public class RealEstatePropertyController {
     private final RealEstatePropertyService realEstatePropertyService;
 
     @PostMapping("/save")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<?> save(@ModelAttribute RealEstatePropertyRequest request) {
         try {
 
@@ -55,6 +59,7 @@ public class RealEstatePropertyController {
     }
 
     @PutMapping("/update/{id}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<?> update(@PathVariable Long id, @ModelAttribute RealEstatePropertyRequest request) {
         try {
 
@@ -72,6 +77,7 @@ public class RealEstatePropertyController {
     }
 
     @DeleteMapping("/delete/{id}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<?> delete(@PathVariable Long id) {
         try {
             realEstatePropertyService.delete(id);
@@ -212,7 +218,8 @@ public class RealEstatePropertyController {
         return realEstatePropertyService.searchLotPropertiesByParent(request, pageable);
     }
 
-    @GetMapping("/change-status/{id}/{status}")
+    @PostMapping("/change-status/{id}/{status}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<?> changePropertyStatus(@PathVariable Long id, @PathVariable String status) {
         try {
             RealEstatePropertyStatusEnum statusEnum = RealEstatePropertyStatusEnum.valueOf(status.toUpperCase());
@@ -226,7 +233,8 @@ public class RealEstatePropertyController {
         }
     }
 
-    @GetMapping("/change-recipient/{propertyId}")
+    @PostMapping("/change-recipient/{propertyId}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<?> changeRecipient(@PathVariable Long propertyId,
             @RequestParam(required = false) Long userId) {
         try {
@@ -264,6 +272,15 @@ public class RealEstatePropertyController {
         return realEstatePropertyService.getPropertiesByRecipientId(recipientId, pageable);
     }
 
+    @GetMapping("/recipient/me")
+    @PreAuthorize("hasAuthority('RESERVATAIRE')")
+    public Page<RealEstateProperty> getMyProperties(Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        User user = (User) authentication.getPrincipal();
+        return realEstatePropertyService.getPropertiesByRecipientId(user.getId(), PageRequest.of(page, size));
+    }
+
     @GetMapping("/recipient/{recipientId}/all")
     public Page<RealEstateProperty> getPropertiesByRecipientAll(
             @PathVariable Long recipientId,
@@ -291,17 +308,25 @@ public class RealEstatePropertyController {
         return realEstatePropertyService.getReservedPropertiesByNotaryId(notaryId, search, status, pageable);
     }
 
-    @GetMapping("/sold/{id}")
-    public ResponseEntity<?> sold(@PathVariable Long id) {
-        try {
+    @GetMapping("/notary/me")
+    @PreAuthorize("hasAuthority('NOTAIRE')")
+    public Page<RealEstateProperty> getMyNotaryProperties(Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            RealEstatePropertyStatusEnum status,
+            @RequestParam(required = false) String search) {
+        User user = (User) authentication.getPrincipal();
+        return realEstatePropertyService.getReservedPropertiesByNotaryId(user.getId(), search, status,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp")));
+    }
 
-            return ResponseEntity
-                    .ok(realEstatePropertyService.sold(id));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body("Invalid status value");
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Error updating status: " + e.getMessage());
+    @PostMapping("/{id}/sale-validation")
+    @PreAuthorize("hasAuthority('NOTAIRE')")
+    public ResponseEntity<?> validateSale(@PathVariable Long id, Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof User notary)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        return ResponseEntity.ok(realEstatePropertyService.validateSale(id, notary));
     }
 
     @GetMapping("/count-no-parent")
@@ -354,13 +379,15 @@ public class RealEstatePropertyController {
         return propreties.isEmpty() ? ResponseEntity.notFound().build() : ResponseEntity.ok(propreties);
     }
 
-    @GetMapping("/budget/{id}/{budget}")
+    @PostMapping("/budget/{id}/{budget}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<?> addOwner(@PathVariable Long id, @PathVariable double budget) {
         return ResponseEntity
                 .ok(realEstatePropertyService.addBudget(id, budget));
     }
 
-    @GetMapping("/allocate-budget/{id}")
+    @PostMapping("/allocate-budget/{id}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<?> allocateBudgetAndGenerateCalls(@PathVariable Long id) {
         realEstatePropertyService.allocateBudgetAndGenerateCalls(id);
         return ResponseEntity
@@ -431,7 +458,8 @@ public class RealEstatePropertyController {
 
     /// cancel
     // reservation
-    @GetMapping("/cancel/res/{id}")
+    @PostMapping("/cancel/res/{id}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<?> cancelRes(@PathVariable Long id) {
         realEstatePropertyService.cancelRes(id);
         return ResponseEntity

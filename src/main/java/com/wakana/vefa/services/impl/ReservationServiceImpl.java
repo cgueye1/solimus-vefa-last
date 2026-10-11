@@ -15,6 +15,7 @@ import com.wakana.vefa.repository.UserRepository;
 import com.wakana.vefa.services.EmailService;
 import com.wakana.vefa.services.NotificationsService;
 import com.wakana.vefa.services.ReservationService;
+import com.wakana.vefa.exception.BusinessException;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,6 +33,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import org.springframework.http.HttpStatus;
 
 @Service
 @Slf4j
@@ -111,6 +113,11 @@ public class ReservationServiceImpl implements ReservationService {
                                                 return new IllegalArgumentException("Bien immobilier introuvable");
                                         });
 
+                        if (property.getStatus() != RealEstatePropertyStatusEnum.AVAILABLE) {
+                                throw new BusinessException("PROPERTY_NOT_AVAILABLE",
+                                                "Ce lot n'est plus disponible.", HttpStatus.CONFLICT);
+                        }
+
                         log.info("🏠 Bien trouvé | id={} name={}", property.getId(), property.getName());
 
                         // =========================
@@ -119,7 +126,9 @@ public class ReservationServiceImpl implements ReservationService {
                         Optional<Reservation> existingReservation = reservationRepository
                                         .findByPropertyAndUser(property, user);
 
-                        if (existingReservation.isPresent()) {
+                        if (existingReservation.isPresent()
+                                        && (existingReservation.get().getStatus() == ReservationStatus.PROSPECT
+                                                        || existingReservation.get().getStatus() == ReservationStatus.RESERVED)) {
                                 log.warn("⚠️ Réservation déjà existante | reservationId={}",
                                                 existingReservation.get().getId());
 
@@ -240,7 +249,7 @@ public class ReservationServiceImpl implements ReservationService {
 
                 if (reservation.getStatus() == ReservationStatus.RESERVED) {
                         reservation.getProperty().setRecipient(null);
-                        reservation.getProperty().setStatus(RealEstatePropertyStatusEnum.AVAILABLE);
+                        reservation.getProperty().restoreAvailability();
                         realEstatePropertyRepository.save(reservation.getProperty());
                 }
 
@@ -307,7 +316,7 @@ public class ReservationServiceImpl implements ReservationService {
 
                 // Associer l'utilisateur comme le destinataire du bien immobilier
                 reservation.getProperty().setRecipient(recipient);
-                reservation.getProperty().setStatus(RealEstatePropertyStatusEnum.RESERVED);
+                reservation.getProperty().changeStatus(RealEstatePropertyStatusEnum.RESERVED);
 
                 // Sauvegarder le bien immobilier avec le nouveau destinataire
                 propertyRepository.save(reservation.getProperty());
@@ -343,6 +352,93 @@ public class ReservationServiceImpl implements ReservationService {
                                 reservation.getProperty(),
                                 recipient);
 
+                return reservationRepository.save(reservation);
+        }
+
+        @Transactional
+        @Override
+        public Reservation validateReservation(Long id, User promoter, boolean canSend) {
+                Reservation reservation = reservationRepository.findById(id)
+                                .orElseThrow(() -> new BusinessException("RESERVATION_NOT_FOUND",
+                                                "Réservation introuvable.", HttpStatus.NOT_FOUND));
+                RealEstateProperty property = reservation.getProperty();
+
+                if (promoter.getProfil() != ProfilEnum.PROMOTEUR
+                                || property.getPromoter() == null
+                                || !promoter.getId().equals(property.getPromoter().getId())) {
+                        throw new BusinessException("RESERVATION_NOT_AUTHORIZED",
+                                        "Le promoteur connecté ne possède pas ce lot.", HttpStatus.FORBIDDEN);
+                }
+                if (reservation.getStatus() != ReservationStatus.PROSPECT) {
+                        throw new BusinessException("RESERVATION_ALREADY_PROCESSED",
+                                        "Cette réservation n'est plus en attente.", HttpStatus.CONFLICT);
+                }
+                if (property.getStatus() != RealEstatePropertyStatusEnum.AVAILABLE) {
+                        throw new BusinessException("PROPERTY_NOT_AVAILABLE",
+                                        "Ce lot n'est plus disponible.", HttpStatus.CONFLICT);
+                }
+
+                reservation.setStatus(ReservationStatus.RESERVED);
+                reservation.setValidatedAt(LocalDateTime.now());
+                property.setRecipient(reservation.getUser());
+                property.changeStatus(RealEstatePropertyStatusEnum.RESERVED);
+                propertyRepository.save(property);
+
+                reservationRepository.findByProperty(property).stream()
+                                .filter(other -> !other.getId().equals(reservation.getId()))
+                                .filter(other -> other.getStatus() == ReservationStatus.PROSPECT)
+                                .forEach(other -> {
+                                        other.setStatus(ReservationStatus.REJECTED);
+                                        other.setRejectedAt(LocalDateTime.now());
+                                        other.setRejectionReason("Une autre réservation du lot a été validée.");
+                                        reservationRepository.save(other);
+                                });
+
+                return reservationRepository.save(reservation);
+        }
+
+        @Transactional
+        @Override
+        public Reservation rejectReservation(Long id, User promoter, String reason) {
+                Reservation reservation = reservationRepository.findById(id)
+                                .orElseThrow(() -> new BusinessException("RESERVATION_NOT_FOUND",
+                                                "Réservation introuvable.", HttpStatus.NOT_FOUND));
+                RealEstateProperty property = reservation.getProperty();
+                if (promoter.getProfil() != ProfilEnum.PROMOTEUR
+                                || property.getPromoter() == null
+                                || !promoter.getId().equals(property.getPromoter().getId())) {
+                        throw new BusinessException("RESERVATION_NOT_AUTHORIZED",
+                                        "Le promoteur connecté ne possède pas ce lot.", HttpStatus.FORBIDDEN);
+                }
+                if (reservation.getStatus() != ReservationStatus.PROSPECT) {
+                        throw new BusinessException("RESERVATION_ALREADY_PROCESSED",
+                                        "Seule une réservation en attente peut être refusée.", HttpStatus.CONFLICT);
+                }
+                reservation.setStatus(ReservationStatus.REJECTED);
+                reservation.setRejectedAt(LocalDateTime.now());
+                reservation.setRejectionReason(reason);
+                return reservationRepository.save(reservation);
+        }
+
+        @Transactional
+        @Override
+        public Reservation cancelReservation(Long id, User reservataire) {
+                Reservation reservation = reservationRepository.findById(id)
+                                .orElseThrow(() -> new BusinessException("RESERVATION_NOT_FOUND",
+                                                "Réservation introuvable.", HttpStatus.NOT_FOUND));
+                if (reservataire.getProfil() != ProfilEnum.RESERVATAIRE
+                                || reservation.getUser() == null
+                                || !reservataire.getId().equals(reservation.getUser().getId())) {
+                        throw new BusinessException("RESERVATION_NOT_AUTHORIZED",
+                                        "Cette réservation n'appartient pas au réservataire connecté.",
+                                        HttpStatus.FORBIDDEN);
+                }
+                if (reservation.getStatus() != ReservationStatus.PROSPECT) {
+                        throw new BusinessException("RESERVATION_ALREADY_PROCESSED",
+                                        "Seule une réservation en attente peut être annulée.", HttpStatus.CONFLICT);
+                }
+                reservation.setStatus(ReservationStatus.CANCELLED);
+                reservation.setCancelledAt(LocalDateTime.now());
                 return reservationRepository.save(reservation);
         }
 

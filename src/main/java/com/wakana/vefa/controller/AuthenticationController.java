@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -60,9 +61,10 @@ public class AuthenticationController {
 
     @PutMapping("/password/change/{id}")
     public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest changePasswordRequest,
-            @PathVariable Long id) {
+            @PathVariable Long id, Authentication authentication) {
         try {
-            User updatedUser = authenticationService.changePassword(changePasswordRequest, id);
+            changePasswordRequest.setEmail(authentication.getName());
+            User updatedUser = authenticationService.changePassword(changePasswordRequest);
             return ResponseEntity.ok(updatedUser);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());

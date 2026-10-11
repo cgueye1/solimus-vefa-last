@@ -19,6 +19,17 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+        @ExceptionHandler(BusinessException.class)
+        public ResponseEntity<ApiErrorResponse> handleBusinessException(
+                        BusinessException ex, HttpServletRequest request) {
+                return ResponseEntity.status(ex.getStatus()).body(new ApiErrorResponse(
+                                LocalDateTime.now(),
+                                ex.getStatus().value(),
+                                ex.getCode(),
+                                ex.getMessage(),
+                                request.getRequestURI()));
+        }
+
     // ── IllegalArgumentException ──────────────────────────────────────────────
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiErrorResponse> handleIllegalArgumentException(

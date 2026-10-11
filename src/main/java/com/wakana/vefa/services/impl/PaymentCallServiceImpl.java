@@ -9,8 +9,8 @@ import com.wakana.vefa.model.PaymentCall;
 import com.wakana.vefa.model.RealEstateProperty;
 import com.wakana.vefa.repository.PaymentCallRepository;
 import com.wakana.vefa.repository.RealEstatePropertyRepository;
-import com.wakana.vefa.services.LamSmsService;
 import com.wakana.vefa.services.NotificationsService;
+import com.wakana.vefa.services.EmailService;
 import com.wakana.vefa.services.PaymentCallPdfService;
 import com.wakana.vefa.services.PaymentCallService;
 import jakarta.persistence.EntityNotFoundException;
@@ -27,6 +27,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 @Service
 @RequiredArgsConstructor
@@ -36,14 +39,44 @@ public class PaymentCallServiceImpl implements PaymentCallService {
         private final RealEstatePropertyRepository realEstatePropertyRepository;
 
         private final NotificationsService notificationsService;
+        private final EmailService emailService;
 
-        private final LamSmsService lamSmsService;
 
         private final PaymentCallPdfService paymentCallPdfService;
 
         @Override
         public List<PaymentCall> getPaymentCallsForProperty(Long propertyId) {
-                return paymentCallRepository.findByRealEstatePropertyIdOrderByCreatedAtDesc(propertyId);
+                return withOverdueFlag(paymentCallRepository.findByRealEstatePropertyIdOrderByCreatedAtDesc(propertyId));
+        }
+
+        @Override
+        public List<PaymentCall> getPaymentCallsForRecipient(Long recipientId) {
+                return withOverdueFlag(paymentCallRepository.findByRealEstatePropertyRecipientIdOrderByExpectedDateAsc(recipientId));
+        }
+
+        private List<PaymentCall> withOverdueFlag(List<PaymentCall> calls) {
+                calls.forEach(call -> call.setOverdue(isOverdue(call)));
+                return calls;
+        }
+
+        private boolean isOverdue(PaymentCall call) {
+                if (call.getStatus() == PaymentCallStatusEnum.OVERDUE) {
+                        return true;
+                }
+                if (call.getStatus() != PaymentCallStatusEnum.PENDING || call.getExpectedDate() == null) {
+                        return false;
+                }
+                for (DateTimeFormatter formatter : List.of(
+                                DateTimeFormatter.ISO_LOCAL_DATE,
+                                DateTimeFormatter.ofPattern("dd-MM-yyyy"),
+                                DateTimeFormatter.ofPattern("dd/MM/yyyy"))) {
+                        try {
+                                return LocalDate.parse(call.getExpectedDate().trim(), formatter).isBefore(LocalDate.now());
+                        } catch (DateTimeParseException ignored) {
+                                // Try the next legacy date format.
+                        }
+                }
+                return false;
         }
 
         @Override
@@ -60,9 +93,12 @@ public class PaymentCallServiceImpl implements PaymentCallService {
                                 .filter(pc -> pc.getPercentage() > 0)
                                 .toList();
 
+                double finalAmount = calculateFinalAmount(
+                                request.getAmount(), request.getTva(), request.getTom());
+
                 double totalAmount = existingCalls.stream()
                                 .mapToDouble(PaymentCall::getAmount)
-                                .sum() + request.getAmount(); // inclure le nouvel appel
+                                .sum() + finalAmount; // inclure le nouvel appel avec taxes
 
                 double totalPercentage = existingCalls.stream()
                                 .mapToDouble(PaymentCall::getPercentage)
@@ -93,10 +129,6 @@ public class PaymentCallServiceImpl implements PaymentCallService {
                 paymentCall.setTva(request.getTva());
 
                 // Calcul montant final avec TVA/TOM
-                double finalAmount = calculateFinalAmount(
-                                request.getAmount(),
-                                request.getTva(),
-                                request.getTom());
                 paymentCall.setAmount(finalAmount);
 
                 // Notification si destinataire défini
@@ -111,7 +143,6 @@ public class PaymentCallServiceImpl implements PaymentCallService {
                                         + "Montant : " + finalAmount + " CFA\n"
                                         + "Date prévue : " + request.getExpectedDate();
 
-                        // lamSmsService.sendSms(property.getRecipient().getTelephone(), message);
                 }
 
                 PaymentCall savedPaymentCall = paymentCallRepository.save(paymentCall);
@@ -137,9 +168,11 @@ public class PaymentCallServiceImpl implements PaymentCallService {
                                         .filter(pc -> pc.getPercentage() > 0 && !pc.getId().equals(existing.getId()))
                                         .toList();
 
+                        double finalAmount = calculateFinalAmount(
+                                        request.getAmount(), request.getTva(), request.getTom());
                         double totalAmount = otherCalls.stream()
                                         .mapToDouble(PaymentCall::getAmount)
-                                        .sum() + request.getAmount();
+                                        .sum() + finalAmount;
 
                         double totalPercentage = otherCalls.stream()
                                         .mapToDouble(PaymentCall::getPercentage)
@@ -159,17 +192,16 @@ public class PaymentCallServiceImpl implements PaymentCallService {
                         existing.setLabel(request.getLabel());
                         existing.setPercentage(request.getPercentage());
                         existing.setExpectedDate(request.getExpectedDate());
-                        existing.setStatus(PaymentCallStatusEnum.valueOf(request.getStatus()));
+                        String requestedStatus = request.getStatus();
+                        existing.setStatus(requestedStatus == null || requestedStatus.isBlank()
+                                        ? existing.getStatus()
+                                        : PaymentCallStatusEnum.valueOf(requestedStatus.toUpperCase()));
                         existing.setUpdatedAt(System.currentTimeMillis());
                         existing.setTom(request.getTom());
                         existing.setTva(request.getTva());
                         existing.setBaseAmount(request.getAmount());
                         existing.setRef(request.getRef());
 
-                        double finalAmount = calculateFinalAmount(
-                                        request.getAmount(),
-                                        request.getTva(),
-                                        request.getTom());
                         existing.setAmount(finalAmount);
 
                         return paymentCallRepository.save(existing);
@@ -266,10 +298,45 @@ public class PaymentCallServiceImpl implements PaymentCallService {
                                                         Arrays.toString(PaymentCallStatusEnum.values()));
                 }
 
+                PaymentCallStatusEnum previousStatus = paymentCall.getStatus();
                 paymentCall.setStatus(statusEnum);
                 paymentCall.setUpdatedAt(System.currentTimeMillis());
 
-                return paymentCallRepository.save(paymentCall);
+                PaymentCall savedPaymentCall = paymentCallRepository.save(paymentCall);
+                if (previousStatus != PaymentCallStatusEnum.PAID && statusEnum == PaymentCallStatusEnum.PAID) {
+                        notifyRecipientOfPayment(savedPaymentCall);
+                }
+
+                return savedPaymentCall;
+        }
+
+        private void notifyRecipientOfPayment(PaymentCall paymentCall) {
+                RealEstateProperty property = paymentCall.getRealEstateProperty();
+                if (property == null || property.getRecipient() == null
+                                || property.getRecipient().getEmail() == null
+                                || property.getRecipient().getEmail().isBlank()) {
+                        return;
+                }
+
+                String recipientName = property.getRecipient().getPrenom() + " " + property.getRecipient().getNom();
+                String propertyName = property.getName() == null ? "votre lot" : property.getName();
+                String html = "<p>Bonjour " + recipientName + ",</p>"
+                                + "<p>Nous vous confirmons que votre appel de fonds concernant <strong>"
+                                + propertyName + "</strong> a été marqué comme payé.</p>"
+                                + "<p>Montant payé : <strong>"
+                                + String.format("%,.0f FCFA", paymentCall.getAmount()) + "</strong></p>"
+                                + "<p>Merci pour votre confiance.</p>";
+
+                try {
+                        emailService.sendHtmlMessage(
+                                        property.getRecipient().getEmail(),
+                                        "Confirmation de paiement de votre appel de fonds",
+                                        html,
+                                        null);
+                } catch (RuntimeException exception) {
+                        System.err.println("Impossible d'envoyer la confirmation de paiement : "
+                                        + exception.getMessage());
+                }
         }
 
         private double calculateFinalAmount(double baseAmount, Double tva, Double tom) {

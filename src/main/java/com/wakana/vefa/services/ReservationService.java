@@ -3,6 +3,7 @@ package com.wakana.vefa.services;
 import com.wakana.vefa.dto.ReservationRequest;
 import com.wakana.vefa.dto.ReservationStats;
 import com.wakana.vefa.model.Reservation;
+import com.wakana.vefa.model.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -26,6 +27,12 @@ public interface ReservationService {
     Page<Reservation> getReservationsByLotId(Long lotId, Pageable pageable);
 
     Reservation valideReservation(Long id, boolean canSendMail);
+
+        Reservation validateReservation(Long id, User promoter, boolean canSendMail);
+
+        Reservation rejectReservation(Long id, User promoter, String reason);
+
+        Reservation cancelReservation(Long id, User reservataire);
 
     Page<Reservation> getRentalReservationsByUserId(Long userId, Pageable pageable);
 

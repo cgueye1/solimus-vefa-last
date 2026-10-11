@@ -32,7 +32,6 @@ import com.wakana.vefa.services.AuthenticationService;
 import com.wakana.vefa.services.CompanyService;
 import com.wakana.vefa.services.EmailService;
 import com.wakana.vefa.services.JWTService;
-import com.wakana.vefa.services.LamSmsService;
 import com.wakana.vefa.services.OwnerPropertyAreaService;
 import com.wakana.vefa.services.RealEstatePropertyService;
 import com.wakana.vefa.services.ReservationService;
@@ -68,7 +67,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private ReservationService reservationService;
     @Autowired
     private EmailService emailService;
-    private final LamSmsService lamSmsService;
 
     // ─────────────────────────────────────────────────────────────────────────
     // SIGN UP
@@ -357,7 +355,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .orElseGet(() -> userRepository.findByEmail(userEmail)
                         .orElseThrow(() -> new IllegalArgumentException("Token invalide.")));
 
-        if (!jwtService.isTokenValid(refreshTokenRequest.getToken(), user)) {
+        if (!jwtService.isRefreshTokenValid(refreshTokenRequest.getToken(), user)) {
             throw new IllegalArgumentException("Token expiré ou invalide.");
         }
 
@@ -365,7 +363,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         JwtAuthenticationResponse response = new JwtAuthenticationResponse();
         response.setToken(jwt);
-        response.setRefreshToken(refreshTokenRequest.getToken());
+        response.setRefreshToken(jwtService.generateRefreshToken(new HashMap<>(), user, user.getId(), user.getProfil()));
         return response;
     }
 

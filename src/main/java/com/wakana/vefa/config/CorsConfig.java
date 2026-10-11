@@ -13,7 +13,15 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
-                        .allowedOrigins("http://localhost:4200", "https://solimus.sn", "http://89.38.135.235","http://localhost:55938/")
+                        .allowedOrigins(
+                            "http://localhost:4200",
+                            "http://localhost:4300",
+                            "http://localhost:4301",
+                            "http://127.0.0.1:4200",
+                            "http://127.0.0.1:4300",
+                            "http://127.0.0.1:4301",
+                            "https://solimus.sn",
+                            "https://vefa.solimus.sn")
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);

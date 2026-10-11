@@ -46,6 +46,18 @@
         text-transform: uppercase;
       }
 
+      .company-identity {
+        text-align: left;
+        margin-bottom: 18px;
+        color: #52606d;
+        font-size: 10px;
+      }
+
+      .company-identity strong {
+        color: #1a4d80;
+        font-size: 14px;
+      }
+
       /* Informations programme */
       .program-info {
         background: #f8f9fa;
@@ -250,6 +262,12 @@
     </style>
   </head>
   <body>
+    <div class="company-identity" th:if="${company != null}">
+      <strong th:text="${company.name}">Entreprise</strong><br />
+      <span th:if="${company.address != null and !company.address.isEmpty()}" th:text="${company.address}">Adresse</span><br th:if="${company.address != null and !company.address.isEmpty()}" />
+      <span th:if="${company.registrationNumber != null and !company.registrationNumber.isEmpty()}" th:text="'RCCM : ' + ${company.registrationNumber}">RCCM</span>
+      <span th:if="${company.ninea != null and !company.ninea.isEmpty()}" th:text="' | NINEA : ' + ${company.ninea}">NINEA</span>
+    </div>
     <div class="header">
       <h1>APPEL DE FONDS</h1>
       <div class="subheader">Vente en l'État Futur d'Achèvement (VEFA)</div>

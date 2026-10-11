@@ -27,6 +27,9 @@ public class Reservation {
     
     private Long createdAt;
     private LocalDateTime validatedAt;
+    private LocalDateTime rejectedAt;
+    private LocalDateTime cancelledAt;
+    private String rejectionReason;
     
   
 }

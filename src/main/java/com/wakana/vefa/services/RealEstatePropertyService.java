@@ -8,6 +8,7 @@ import com.wakana.vefa.dto.ReservationStats;
 import com.wakana.vefa.enums.ProfilEnum;
 import com.wakana.vefa.enums.RealEstatePropertyStatusEnum;
 import com.wakana.vefa.model.RealEstateProperty;
+import com.wakana.vefa.model.User;
 
 import java.util.List;
 import java.util.Set;
@@ -95,7 +96,7 @@ public interface RealEstatePropertyService {
                         RealEstatePropertyStatusEnum status, Pageable pageable);
 
         @CacheEvict(value = { "properties", "dashboard", "lists" }, allEntries = true)
-        RealEstatePropertyResponse sold(Long propertyId);
+        RealEstatePropertyResponse validateSale(Long propertyId, User notary);
 
         @Cacheable(value = "dashboard", key = "'noParent'")
         long countPropertiesWithoutParent();

@@ -9,6 +9,8 @@ import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.wakana.vefa.enums.RealEstatePropertyStatusEnum;
+import com.wakana.vefa.exception.BusinessException;
+import org.springframework.http.HttpStatus;
 import java.util.Set;
 
 @Data
@@ -123,6 +125,9 @@ public class RealEstateProperty {
     @Enumerated(EnumType.STRING)
     private RealEstatePropertyStatusEnum status;
 
+    @Version
+    private Long version;
+
     private boolean lotFeesPaid;
 
     @JsonManagedReference
@@ -142,6 +147,37 @@ public class RealEstateProperty {
     private LocalDateTime rentalDate;
 
     private LocalDateTime soldAt;
+
+    public void initializeAsAvailable() {
+        status = RealEstatePropertyStatusEnum.AVAILABLE;
+        available = true;
+    }
+
+    public void restoreAvailability() {
+        if (status == RealEstatePropertyStatusEnum.SOLD) {
+            throw new BusinessException("SOLD_PROPERTY_CANNOT_BE_REOPENED",
+                    "Un lot vendu ne peut pas redevenir disponible.", HttpStatus.CONFLICT);
+        }
+        status = RealEstatePropertyStatusEnum.AVAILABLE;
+        available = true;
+    }
+
+    public void changeStatus(RealEstatePropertyStatusEnum newStatus) {
+        if (status == newStatus) {
+            available = newStatus == RealEstatePropertyStatusEnum.AVAILABLE;
+            return;
+        }
+        boolean validTransition = (status == RealEstatePropertyStatusEnum.AVAILABLE
+                && newStatus == RealEstatePropertyStatusEnum.RESERVED)
+                || (status == RealEstatePropertyStatusEnum.RESERVED
+                        && newStatus == RealEstatePropertyStatusEnum.SOLD);
+        if (!validTransition) {
+            throw new BusinessException("INVALID_PROPERTY_STATUS_TRANSITION",
+                    "Transition de statut du lot non autorisée.", HttpStatus.CONFLICT);
+        }
+        status = newStatus;
+        available = newStatus == RealEstatePropertyStatusEnum.AVAILABLE;
+    }
 
     @JsonIgnore
     @OneToMany(mappedBy = "property", cascade = CascadeType.ALL, orphanRemoval = true)

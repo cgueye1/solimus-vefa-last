@@ -97,7 +97,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 filterChain.doFilter(request, response);
                 return;
             }
-            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid or expired token");
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
             return;
         }
 
@@ -114,7 +114,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.setContext(context);
             } else {
                 if (!isPublicPath(path)) {
-                    response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid token");
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
                     return;
                 }
             }

@@ -37,4 +37,5 @@ build/
 data/
 files/*.tar
 *.tar
+.env
 src/main/resources/serviceAccountKey.json

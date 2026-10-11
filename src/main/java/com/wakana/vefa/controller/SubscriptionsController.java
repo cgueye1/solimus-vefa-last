@@ -26,6 +26,8 @@ import com.wakana.vefa.util.ProfilEnumUtils;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/user-subscriptions")
@@ -41,6 +43,7 @@ public class SubscriptionsController {
      * ✅ Créer un abonnement
      */
     @GetMapping("/create/{userId}/{planId}/{months}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<Void> createSubscription(
             @PathVariable Long userId,
             @PathVariable Long planId,
@@ -118,16 +121,32 @@ public class SubscriptionsController {
      * ✅ Vérifier si l’abonnement est actif pour un utilisateur
      */
     @GetMapping("/is-active/{userId}/{profil}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<Boolean> isSubscriptionActive(@PathVariable Long userId, @PathVariable String profil) {
         return ResponseEntity.ok(subscriptionService.isSubscriptionActive(userId, profil));
+    }
+
+    @GetMapping("/me/is-active")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
+    public ResponseEntity<Boolean> isMySubscriptionActive(Authentication authentication) {
+        User user = (User) authentication.getPrincipal();
+        return ResponseEntity.ok(subscriptionService.isSubscriptionActive(user.getId(), user.getProfil().name()));
     }
 
     /**
      * 🏗️ Vérifier si l’utilisateur peut créer un projet
      */
     @GetMapping("/can-create-project/{userId}/{profil}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<Boolean> canCreateProject(@PathVariable Long userId, @PathVariable String profil) {
         return ResponseEntity.ok(subscriptionService.canCreateProject(userId, profil));
+    }
+
+    @GetMapping("/me/can-create-project")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
+    public ResponseEntity<Boolean> canCreateMyProject(Authentication authentication) {
+        User user = (User) authentication.getPrincipal();
+        return ResponseEntity.ok(subscriptionService.canCreateProject(user.getId(), user.getProfil().name()));
     }
 
     /**

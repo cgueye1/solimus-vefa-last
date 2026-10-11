@@ -20,16 +20,23 @@ import jakarta.servlet.http.HttpServletRequest;
 @Service
 public class JWTServiceImpl implements JWTService {
 
+    private static final String TOKEN_TYPE_CLAIM = "tokenType";
+    private static final String ACCESS_TOKEN = "access";
+    private static final String REFRESH_TOKEN = "refresh";
+    private static final long ACCESS_TOKEN_DURATION_MS = 15 * 60 * 1000L;
+    private static final long REFRESH_TOKEN_DURATION_MS = 7 * 24 * 60 * 60 * 1000L;
+
     public String generateToken(UserDetails userDetails, Long userId, ProfilEnum profil) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("profil", profil);
+        claims.put(TOKEN_TYPE_CLAIM, ACCESS_TOKEN);
 
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24 * 365)) // 1 an
+                .setExpiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_DURATION_MS))
                 .signWith(getSiginKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -42,12 +49,13 @@ public class JWTServiceImpl implements JWTService {
 
         extraClaims.put("userId", userId);
         extraClaims.put("profil", profil);
+        extraClaims.put(TOKEN_TYPE_CLAIM, REFRESH_TOKEN);
 
         return Jwts.builder()
                 .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 604080000))
+                .setExpiration(new Date(System.currentTimeMillis() + REFRESH_TOKEN_DURATION_MS))
                 .signWith(getSiginKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -75,7 +83,15 @@ public class JWTServiceImpl implements JWTService {
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUserName(token);
-        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token)
+            && ACCESS_TOKEN.equals(extractClaim(token, claims -> claims.get(TOKEN_TYPE_CLAIM, String.class))));
+        }
+
+        @Override
+        public boolean isRefreshTokenValid(String token, UserDetails userDetails) {
+        final String username = extractUserName(token);
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token)
+            && REFRESH_TOKEN.equals(extractClaim(token, claims -> claims.get(TOKEN_TYPE_CLAIM, String.class))));
     }
 
     private boolean isTokenExpired(String token) {

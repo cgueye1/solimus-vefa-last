@@ -10,6 +10,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -67,11 +68,11 @@ public class UserController {
 
   @GetMapping("/me")
   public ResponseEntity<User> getMe() {
-    UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    String username = authentication.getName();
 
-    String username = userDetails.getUsername();
-
-    User user = userRepository.findByTelephone(username).orElse(null); // $
+    User user = userRepository.findByTelephone(username)
+        .orElseGet(() -> userRepository.findByEmail(username).orElse(null));
 
     /*
      * SubscriptionPlan subscriptionPlan =
@@ -93,12 +94,7 @@ public class UserController {
   public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest changePasswordRequest) {
 
     try {
-      /*
-       * UserDetails userDetails = (UserDetails)
-       * SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-       * String username = userDetails.getUsername();
-       * changePasswordRequest.setEmail(username);
-       */
+      changePasswordRequest.setEmail(SecurityContextHolder.getContext().getAuthentication().getName());
       return ResponseEntity.ok(authenticationService.changePassword(changePasswordRequest));
     } catch (Exception e) {
       return ResponseEntity

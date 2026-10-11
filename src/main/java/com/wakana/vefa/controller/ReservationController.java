@@ -13,6 +13,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import com.wakana.vefa.model.User;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
@@ -26,9 +29,9 @@ public class ReservationController {
 
     // Create a new reservation
     @PostMapping
+    @PreAuthorize("hasAuthority('RESERVATAIRE')")
     public ResponseEntity<Reservation> createReservation(@RequestBody ReservationRequest reservationRequest) {
         log.info("🚀 API /api/reservations appelée");
-        System.out.println("hii");
         Reservation reservation = reservationService.createReservation(reservationRequest, true);
         return ResponseEntity.ok(reservation);
     }
@@ -72,6 +75,16 @@ public class ReservationController {
         return ResponseEntity.ok(reservations);
     }
 
+    @GetMapping("/me")
+    @PreAuthorize("hasAuthority('RESERVATAIRE')")
+    public ResponseEntity<Page<Reservation>> getMyReservations(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        User user = (User) authentication.getPrincipal();
+        return ResponseEntity.ok(reservationService.getReservationsByUserId(user.getId(), PageRequest.of(page, size)));
+    }
+
     @GetMapping("/lot/{lotId}")
     public ResponseEntity<Page<Reservation>> getReservationsByPropertyId(@PathVariable Long lotId,
             @RequestParam(defaultValue = "0") int page,
@@ -81,10 +94,27 @@ public class ReservationController {
         return ResponseEntity.ok(reservations);
     }
 
-    @GetMapping("/valid/{id}")
-    public ResponseEntity<?> validReservation(@PathVariable Long id) {
+    @PostMapping("/{id}/validation")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
+    public ResponseEntity<?> validateReservation(@PathVariable Long id, Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof User promoter)) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(reservationService.validateReservation(id, promoter, true));
+    }
 
-        return ResponseEntity.ok(reservationService.valideReservation(id, true));
+    @PostMapping("/{id}/rejection")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
+    public ResponseEntity<Reservation> rejectReservation(@PathVariable Long id,
+            @RequestParam(required = false) String reason,
+            Authentication authentication) {
+        return ResponseEntity.ok(reservationService.rejectReservation(id, (User) authentication.getPrincipal(), reason));
+    }
+
+    @PostMapping("/{id}/cancellation")
+    @PreAuthorize("hasAuthority('RESERVATAIRE')")
+    public ResponseEntity<Reservation> cancelReservation(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(reservationService.cancelReservation(id, (User) authentication.getPrincipal()));
     }
 
     // Get paginated reservations by parent property ID

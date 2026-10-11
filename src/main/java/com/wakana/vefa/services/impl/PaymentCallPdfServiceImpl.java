@@ -33,6 +33,7 @@ public class PaymentCallPdfServiceImpl implements PaymentCallPdfService {
                 User promoter = property.getPromoter();
                 User buyer = property.getRecipient();
                 String program = property.getParentProperty().getName();
+                var company = promoter.getCompany();
 
                 // Appels de fonds déjà payés
                 List<PaymentCall> paidCalls = paymentCallRepository
@@ -58,6 +59,7 @@ public class PaymentCallPdfServiceImpl implements PaymentCallPdfService {
                 context.setVariable("paymentCall", paymentCall);
                 context.setVariable("property", property);
                 context.setVariable("promoter", promoter);
+                context.setVariable("company", company);
                 context.setVariable("buyer", buyer);
                 context.setVariable("program", program);
 

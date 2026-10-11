@@ -5,9 +5,11 @@ import com.wakana.vefa.dto.SignatureRequest;
 import com.wakana.vefa.dto.response.DocsResponse;
 import com.wakana.vefa.model.Docs;
 import com.wakana.vefa.model.RealEstateProperty;
+import com.wakana.vefa.model.SignatureAuditLog;
 import com.wakana.vefa.model.SignatoryStatus;
 import com.wakana.vefa.model.User;
 import com.wakana.vefa.repository.DocsRepository;
+import com.wakana.vefa.repository.SignatureAuditLogRepository;
 import com.wakana.vefa.repository.RealEstatePropertyRepository;
 import com.wakana.vefa.repository.UserRepository;
 import com.wakana.vefa.services.DocsService;
@@ -17,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -32,6 +35,8 @@ public class DocsServiceImpl implements DocsService {
     private final DocsRepository docsRepository;
     private final RealEstatePropertyRepository propertyRepository;
     private final UserRepository userRepository;
+    private final SignatureAuditLogRepository signatureAuditLogRepository;
+    private final HttpServletRequest httpServletRequest;
 
     private DocsResponse mapToResponse(Docs docs) {
         DocsResponse response = new DocsResponse();
@@ -175,6 +180,19 @@ public class DocsServiceImpl implements DocsService {
         status.setSignedAt(LocalDateTime.now());
         status.setSignatureNotes(signatureRequest.getSignatureNotes());
 
+        SignatureAuditLog auditLog = new SignatureAuditLog();
+        auditLog.setDocument(docs);
+        auditLog.setSignatory(user);
+        auditLog.setProperty(docs.getRealEstateProperty());
+        auditLog.setDocumentTitle(docs.getTitle());
+        auditLog.setProjectName(docs.getRealEstateProperty().getName());
+        auditLog.setSignerName(buildSignerName(user));
+        auditLog.setSignerPhone(user.getTelephone());
+        auditLog.setSignedAt(status.getSignedAt());
+        auditLog.setClientIpAddress(resolveClientIpAddress(httpServletRequest));
+        auditLog.setSignatureNotes(signatureRequest.getSignatureNotes());
+        signatureAuditLogRepository.save(auditLog);
+
         // Upload signed PDF if provided
         if (signatureRequest.getSignedPdf() != null && !signatureRequest.getSignedPdf().isEmpty()) {
             try {
@@ -188,6 +206,21 @@ public class DocsServiceImpl implements DocsService {
         docs.setLastUpdated(LocalDateTime.now());
         
         return mapToResponse(docsRepository.save(docs));
+    }
+
+    private String buildSignerName(User user) {
+        return String.join(" ",
+                user.getPrenom() == null ? "" : user.getPrenom().trim(),
+                user.getNom() == null ? "" : user.getNom().trim()).trim();
+    }
+
+    private String resolveClientIpAddress(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        return realIp != null && !realIp.isBlank() ? realIp.trim() : request.getRemoteAddr();
     }
 
     @Override

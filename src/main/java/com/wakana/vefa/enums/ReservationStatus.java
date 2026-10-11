@@ -2,7 +2,9 @@ package com.wakana.vefa.enums;
 
 public  enum ReservationStatus {
     PROSPECT("PROSPECT"),
-    RESERVED("RESERVED");
+    RESERVED("RESERVED"),
+    REJECTED("REJECTED"),
+    CANCELLED("CANCELLED");
 
     private final String value;
 

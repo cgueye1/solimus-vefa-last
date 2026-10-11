@@ -37,6 +37,9 @@ public class PaymentCall {
     @Transient
     private Date parsedExpectedDate;
 
+    @Transient
+    private boolean overdue;
+
     private double tom;
     private double tva;
 }

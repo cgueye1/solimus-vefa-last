@@ -1,6 +1,8 @@
 package com.wakana.vefa.services.impl;
 
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.wakana.vefa.dto.DashboardStats;
 import com.wakana.vefa.dto.RealEstatePropertyRequest;
 import com.wakana.vefa.dto.RealEstatePropertyResponse;
@@ -39,6 +41,7 @@ import com.wakana.vefa.services.SubscriptionServices;
 import com.wakana.vefa.specification.RealEstatePropertySpecification;
 import com.wakana.vefa.util.ProfilEnumUtils;
 import com.wakana.vefa.util.XssSanitizer;
+import com.wakana.vefa.exception.BusinessException;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
@@ -65,6 +68,7 @@ import java.time.ZonedDateTime;
 @Service
 @RequiredArgsConstructor
 public class RealEstatePropertyServiceImpl implements RealEstatePropertyService {
+        private static final Logger log = LoggerFactory.getLogger(RealEstatePropertyServiceImpl.class);
         private final PaymentCallRepository paymentCallRepository;
         private final RealEstatePropertyRepository realEstatePropertyRepository;
         private final UserRepository userRepository;
@@ -106,7 +110,6 @@ public class RealEstatePropertyServiceImpl implements RealEstatePropertyService 
                 realEstateProperty.setArea(request.getArea());
                 realEstateProperty.setLatitude(Double.parseDouble(request.getLatitude()));
                 realEstateProperty.setLongitude(Double.parseDouble(request.getLongitude()));
-                realEstateProperty.setAvailable(request.isAvailable());
                 realEstateProperty.setReservationFee(request.getReservationFee());
                 realEstateProperty.setDescription(XssSanitizer.clean(request.getDescription()));
                 realEstateProperty.setNumberOfLots(request.getNumberOfLots());
@@ -129,7 +132,7 @@ public class RealEstatePropertyServiceImpl implements RealEstatePropertyService 
                 realEstateProperty.setHasLaundryRoom(request.isHasLaundryRoom());
                 realEstateProperty.setHasStorageRooms(request.isHasStorageRooms());
                 realEstateProperty.setHasWasteDisposalArea(request.isHasWasteDisposalArea());
-                realEstateProperty.setStatus(RealEstatePropertyStatusEnum.AVAILABLE);
+                realEstateProperty.initializeAsAvailable();
                 realEstateProperty.setCoOwner(request.isCoOwner());
                 realEstateProperty.setMezzanine(request.isMezzanine());
                 // Set promoter, recipient, and notary
@@ -232,7 +235,6 @@ public class RealEstatePropertyServiceImpl implements RealEstatePropertyService 
                 existingProperty.setArea(request.getArea());
                 existingProperty.setLatitude(Double.parseDouble(request.getLatitude()));
                 existingProperty.setLongitude(Double.parseDouble(request.getLongitude()));
-                existingProperty.setAvailable(request.isAvailable());
                 existingProperty.setReservationFee(request.getReservationFee());
                 existingProperty.setDescription(XssSanitizer.clean(request.getDescription()));
                 existingProperty.setNumberOfLots(request.getNumberOfLots());
@@ -523,7 +525,7 @@ public class RealEstatePropertyServiceImpl implements RealEstatePropertyService 
                 RealEstateProperty property = realEstatePropertyRepository.findById(propertyId)
                                 .orElseThrow(() -> new EntityNotFoundException("Property not found"));
 
-                property.setStatus(status);
+                property.changeStatus(status);
                 return realEstatePropertyRepository.save(property);
         }
 
@@ -572,11 +574,8 @@ public class RealEstatePropertyServiceImpl implements RealEstatePropertyService 
                                 .where(RealEstatePropertySpecification.hasParentProperty())
                                 .and((root, query, cb) -> cb.equal(root.get("notary").get("id"), notaryId));
 
-                // Si aucun status n'est fourni → RESERVED
-                if (status == null) {
-                        spec = spec.and((root, query, cb) -> cb.equal(root.get("status"),
-                                        RealEstatePropertyStatusEnum.RESERVED));
-                } else {
+                // Sans filtre, le dashboard du notaire doit suivre tous les statuts.
+                if (status != null) {
                         spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
                 }
 
@@ -589,14 +588,50 @@ public class RealEstatePropertyServiceImpl implements RealEstatePropertyService 
 
         @Transactional
         @Override
-        public RealEstatePropertyResponse sold(Long propertyId) {
+        public RealEstatePropertyResponse validateSale(Long propertyId, User notary) {
                 RealEstateProperty existingProperty = realEstatePropertyRepository.findById(propertyId)
-                                .orElseThrow(() -> new RuntimeException("Property not found with id: " + propertyId));
+                                .orElseThrow(() -> new BusinessException("PROPERTY_NOT_FOUND",
+                                                "Bien immobilier introuvable.", org.springframework.http.HttpStatus.NOT_FOUND));
 
-                if (existingProperty.getStatus() == RealEstatePropertyStatusEnum.RESERVED) {
-                        existingProperty.setStatus(RealEstatePropertyStatusEnum.SOLD);
+                if (notary.getProfil() != ProfilEnum.NOTAIRE
+                                || existingProperty.getNotary() == null
+                                || !notary.getId().equals(existingProperty.getNotary().getId())) {
+                        throw new BusinessException("SALE_NOT_AUTHORIZED",
+                                        "Le notaire connecté n'est pas affecté à ce lot.",
+                                        org.springframework.http.HttpStatus.FORBIDDEN);
+                }
+
+                if (existingProperty.getStatus() == RealEstatePropertyStatusEnum.SOLD) {
+                        throw new BusinessException("SALE_ALREADY_VALIDATED",
+                                        "La vente de ce lot est déjà validée.",
+                                        org.springframework.http.HttpStatus.CONFLICT);
+                }
+
+                String invalidSaleMessage = "La vente est impossible : ce bien n'a pas de réservataire avec une réservation validée.";
+                if (existingProperty.getStatus() != RealEstatePropertyStatusEnum.RESERVED) {
+                        throw new BusinessException("SALE_RESERVATION_NOT_VALIDATED", invalidSaleMessage,
+                                        org.springframework.http.HttpStatus.BAD_REQUEST);
+                }
+
+                Reservation validatedReservation = reservationRepository.findByProperty(existingProperty).stream()
+                                .filter(reservation -> reservation.getStatus() == ReservationStatus.RESERVED
+                                                && reservation.getValidatedAt() != null)
+                                .findFirst()
+                                .orElseThrow(() -> new BusinessException("SALE_RESERVATION_NOT_VALIDATED",
+                                                invalidSaleMessage, org.springframework.http.HttpStatus.BAD_REQUEST));
+
+                if (existingProperty.getRecipient() == null
+                                || !existingProperty.getRecipient().getId().equals(validatedReservation.getUser().getId())) {
+                        throw new BusinessException("SALE_RESERVATION_NOT_VALIDATED", invalidSaleMessage,
+                                        org.springframework.http.HttpStatus.BAD_REQUEST);
+                }
+
+                        existingProperty.changeStatus(RealEstatePropertyStatusEnum.SOLD);
                         existingProperty.setSoldAt(LocalDateTime.now());
 
+                        RealEstateProperty savedProperty = realEstatePropertyRepository.save(existingProperty);
+
+                        try {
                         String subject = emailService.getPropertyHTML(
                                         existingProperty,
                                         "🏡 Vente validée par le notaire",
@@ -651,12 +686,12 @@ public class RealEstatePropertyServiceImpl implements RealEstatePropertyService 
 
                                                 existingProperty, existingProperty.getAgency());
                         }
+                        } catch (Exception notificationError) {
+                                log.warn("Sale validated but notifications failed for property {}", propertyId,
+                                                notificationError);
+                        }
 
-                } else {
-                        existingProperty.setStatus(RealEstatePropertyStatusEnum.RESERVED);
-                }
-
-                return convertToResponse(realEstatePropertyRepository.save(existingProperty));
+                return convertToResponse(savedProperty);
         }
 
         public long countPropertiesWithoutParent() {
@@ -1063,7 +1098,7 @@ public class RealEstatePropertyServiceImpl implements RealEstatePropertyService 
                 RealEstateProperty existingProperty = realEstatePropertyRepository.findById(id)
                                 .orElseThrow(() -> new RuntimeException("Property not found with id: " + id));
 
-                existingProperty.setStatus(RealEstatePropertyStatusEnum.AVAILABLE);
+                existingProperty.restoreAvailability();
                 existingProperty.setRecipient(null);
                 realEstatePropertyRepository.save(existingProperty);
                 /// cancel res

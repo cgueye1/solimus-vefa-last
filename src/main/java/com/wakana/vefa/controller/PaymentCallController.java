@@ -13,10 +13,13 @@ import com.wakana.vefa.dto.response.CallForChargeKpiResponse;
 import com.wakana.vefa.dto.response.PaymentCallKpiDto;
 
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import com.wakana.vefa.model.User;
 
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/payment-calls")
@@ -30,12 +33,22 @@ public class PaymentCallController {
         return paymentCallService.getPaymentCallsForProperty(propertyId);
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<List<PaymentCall>> getPaymentCallsForCurrentUser(Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof User currentUser)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(paymentCallService.getPaymentCallsForRecipient(currentUser.getId()));
+    }
+
     @PostMapping
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public PaymentCall createPaymentCall(@RequestBody PaymentCallRequest paymentCallRequest) {
         return paymentCallService.createPaymentCall(paymentCallRequest);
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public ResponseEntity<PaymentCall> updatePaymentCall(@PathVariable Long id,
             @RequestBody PaymentCallRequest paymentCallRequest) {
         Optional<PaymentCall> updatedPaymentCall = paymentCallService.updatePaymentCall(id, paymentCallRequest);
@@ -56,6 +69,7 @@ public class PaymentCallController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('PROMOTEUR')")
     public void deletePaymentCall(@PathVariable Long id) {
         paymentCallService.deletePaymentCall(id);
     }

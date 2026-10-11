@@ -19,6 +19,10 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
+        boolean existsByPropertyIdAndStatusAndValidatedAtIsNotNull(
+                        Long propertyId,
+                        com.wakana.vefa.enums.ReservationStatus status);
+
         // Existing method to find all reservations ordered by createdAt
         List<Reservation> findAllByOrderByCreatedAtDesc();
 

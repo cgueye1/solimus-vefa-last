@@ -16,54 +16,61 @@ import com.wakana.vefa.dto.OTPRequest1;
 import com.wakana.vefa.model.User;
 import com.wakana.vefa.repository.UserRepository;
 import com.wakana.vefa.services.EmailService;
-import com.wakana.vefa.services.LamSmsService;
+import com.wakana.vefa.services.WhatsAppOtpService;
 import com.wakana.vefa.util.OTPUtil;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @RequestMapping("/api/otp")
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = " SMS")
 public class OtpController {
 
     private final OTPUtil otpUtil;
 
-    private final LamSmsService lamSmsService;
+    private final WhatsAppOtpService whatsAppOtpService;
     private final UserRepository userRepository;
     private final EmailService emailService;
 
     @PostMapping("/send")
     ResponseEntity<?> generateAndSendOTP(@RequestBody OTPRequest1 oTPRequests) throws Exception {
         String otp = otpUtil.generateOTP();
+        String phoneNumber = oTPRequests.getPhoneNumber();
+        String message = otp + " est votre code de validation.";
+        boolean whatsappSent = false;
+        boolean emailSent = false;
 
         try {
-
-            String message = otp + " est votre code de validation.";
-            lamSmsService.sendSms(oTPRequests.getPhoneNumber(), message);
-            otpUtil.storeOTP(oTPRequests.getPhoneNumber(), otp);
-
-            Optional<User> user = userRepository.findByTelephone(oTPRequests.getPhoneNumber());
-
-            if (user.isPresent()) {
-                emailService.sendHtmlMessage(user.get().getEmail(), "Otp ", message,
-                        null);
-            }
-
-            return ResponseEntity.ok(Collections.singletonMap(
-                    "message",
-                    "Votre code OTP a été envoyé par SMS ou par e-mail. Veuillez vérifier vos messages pour obtenir le code de validation."));
-
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Collections.singletonMap("error", "Utilisateur non trouvé"));
-
+            whatsAppOtpService.sendOtp(phoneNumber, otp);
+            whatsappSent = true;
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Collections.singletonMap("error", "Échec d'envoi: " + e.getMessage()));
+            log.warn("Échec d'envoi OTP par WhatsApp pour {}: {}", phoneNumber, e.getMessage());
         }
+
+        Optional<User> user = userRepository.findByTelephone(phoneNumber);
+        if (user.isPresent() && user.get().getEmail() != null && !user.get().getEmail().isBlank()) {
+            try {
+                emailService.sendHtmlMessage(user.get().getEmail(), "Code de validation Solimus", message, null);
+                emailSent = true;
+            } catch (Exception e) {
+                log.warn("Échec d'envoi OTP par e-mail pour {}: {}", phoneNumber, e.getMessage());
+            }
+        }
+
+        if (whatsappSent || emailSent) {
+            otpUtil.storeOTP(phoneNumber, otp);
+            String channels = whatsappSent && emailSent ? "WhatsApp et e-mail"
+                : whatsappSent ? "WhatsApp" : "e-mail";
+            return ResponseEntity.ok(Collections.singletonMap(
+                    "message", "Votre code a été envoyé par " + channels + "."));
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(Collections.singletonMap("error", "Impossible d'envoyer le code de validation."));
     }
 
     @PostMapping("/validate")

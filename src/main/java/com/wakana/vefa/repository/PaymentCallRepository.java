@@ -16,6 +16,8 @@ import java.util.Optional;
 
 public interface PaymentCallRepository extends JpaRepository<PaymentCall, Long> {
 
+        List<PaymentCall> findByRealEstatePropertyRecipientIdOrderByExpectedDateAsc(Long recipientId);
+
     List<PaymentCall> findByRealEstatePropertyId(Long realEstatePropertyId);
 
     List<PaymentCall> findByRealEstatePropertyIdOrderByCreatedAtDesc(Long realEstatePropertyId);

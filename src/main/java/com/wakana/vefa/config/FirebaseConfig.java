@@ -8,10 +8,12 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
 
 import java.io.IOException;
 
 @Configuration
+@ConditionalOnResource(resources = "classpath:serviceAccountKey.json")
 public class FirebaseConfig {
     // classpath:
 

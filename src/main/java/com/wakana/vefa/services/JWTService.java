@@ -17,6 +17,8 @@ public interface JWTService {
 
     boolean isTokenValid(String token, UserDetails userDetails);
 
+    boolean isRefreshTokenValid(String token, UserDetails userDetails);
+
     String extractToken(HttpServletRequest request);
 
     Long extractUserId(String token);
