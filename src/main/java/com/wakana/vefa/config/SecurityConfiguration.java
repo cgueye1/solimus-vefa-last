@@ -51,14 +51,17 @@ public class SecurityConfiguration {
                     "/api/v1/parameters/**",
                     "/api/v1/user/user-count",
                     "/api/v1/user/users/statistics",
-                    "/api/subscriptions-plans/**")
+                    "/api/subscriptions-plans/**",
+                    "/api/realestate/details/**",
+                    "/api/realestate/count-no-parent")
                         .permitAll()
                 .requestMatchers(HttpMethod.POST,
                     "/api/otp/send",
                     "/api/otp/validate",
                     "/api/realestate/search-portail",
                     "/api/realestate/rental/search-portail",
-                    "/api/realestate/search-lot-by-parent")
+                    "/api/realestate/search-lot-by-parent",
+                    "/api/reservations")
                         .permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

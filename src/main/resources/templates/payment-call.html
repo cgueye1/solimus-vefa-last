@@ -265,12 +265,12 @@
     <div class="company-identity" th:if="${company != null}">
       <strong th:text="${company.name}">Entreprise</strong><br />
       <span th:if="${company.address != null and !company.address.isEmpty()}" th:text="${company.address}">Adresse</span><br th:if="${company.address != null and !company.address.isEmpty()}" />
-      <span th:if="${company.registrationNumber != null and !company.registrationNumber.isEmpty()}" th:text="'RCCM : ' + ${company.registrationNumber}">RCCM</span>
-      <span th:if="${company.ninea != null and !company.ninea.isEmpty()}" th:text="' | NINEA : ' + ${company.ninea}">NINEA</span>
+        <span th:if="${company.registrationNumber != null and !company.registrationNumber.isEmpty()}" th:text="|RCCM : ${company.registrationNumber}|">RCCM</span>
+        <span th:if="${company.ninea != null and !company.ninea.isEmpty()}" th:text="| | NINEA : ${company.ninea}|">NINEA</span>
     </div>
     <div class="header">
-      <h1>APPEL DE FONDS</h1>
-      <div class="subheader">Vente en l'État Futur d'Achèvement (VEFA)</div>
+        <h1 th:text="${documentTitle}">APPEL DE FONDS</h1>
+      <div class="subheader" th:text="${documentSubtitle}">Vente en l'Etat Futur d'Achevement (VEFA)</div>
     </div>
 
     <div class="program-info">
@@ -286,28 +286,31 @@
       </p>
       <p>
         <strong>Référence VEFA :</strong>
-        <span th:text="${property.number}" class="percentage-badge"></span>
+        <span th:text="${propertyNumber}" class="percentage-badge"></span>
       </p>
+      <p><strong>Référence document :</strong> <span th:text="${documentNumber}"></span></p>
+      <p><strong>Date d’émission :</strong> <span th:text="${generatedDate}"></span></p>
+      <p><strong>Statut :</strong> <span th:text="${statusText}"></span></p>
     </div>
 
     <div class="parties-container">
-      <div class="party-box">
+      <div class="party-box" th:if="${promoter != null}">
         <div class="party-title">PROMOTEUR</div>
         <div class="party-content">
           <p>
             <strong>Nom :</strong>
-            <span th:text="${promoter.nom} + ' ' + ${promoter.prenom}"></span>
+            <span th:text="${promoterName}"></span>
           </p>
           <p>
             <strong>Adresse :</strong>
-            <span th:text="${promoter.adress}"></span>
+            <span th:text="${promoterAddress}"></span>
           </p>
           <p>
             <strong>Téléphone :</strong>
-            <span th:text="${promoter.telephone}"></span>
+            <span th:text="${promoterPhone}"></span>
           </p>
           <p>
-            <strong>Email :</strong> <span th:text="${promoter.email}"></span>
+            <strong>Email :</strong> <span th:text="${promoterEmail}"></span>
           </p>
         </div>
       </div>
@@ -317,21 +320,22 @@
         <div class="party-content">
           <p>
             <strong>Nom :</strong>
-            <span th:text="${buyer.nom} + ' ' + ${buyer.prenom}"></span>
+            <span th:text="${buyerName}"></span>
           </p>
           <p>
-            <strong>Adresse :</strong> <span th:text="${buyer.adress}"></span>
+            <strong>Adresse :</strong> <span th:text="${buyerAddress}"></span>
           </p>
           <p>
             <strong>Téléphone :</strong>
-            <span th:text="${buyer.telephone}"></span>
+            <span th:text="${buyerPhone}"></span>
           </p>
+          <p><strong>Email :</strong> <span th:text="${buyerEmail}"></span></p>
         </div>
       </div>
     </div>
 
     <div class="payment-section">
-      <div class="section-title">DÉTAIL DE L'APPEL DE FONDS</div>
+      <div class="section-title" th:text="${detailTitle}">DETAIL DE L'APPEL DE FONDS</div>
 
       <table>
         <thead>
@@ -348,7 +352,7 @@
             <td class="amount" th:text="${propertyPrice} + ' FCFA'"></td>
           </tr>
           <tr>
-            <td>Appels déjà réglés</td>
+            <td th:text="${isRental} ? 'Loyers / provisions déjà réglés' : 'Appels déjà réglés'">Appels déjà réglés</td>
             <td>
               <span
                 class="percentage-badge"
@@ -358,7 +362,7 @@
             <td class="amount" th:text="${paidAmount} + ' FCFA'"></td>
           </tr>
           <tr class="highlight-row">
-            <td><strong th:text="${paymentCall.label}"></strong></td>
+            <td><strong th:text="${paymentCall.label}"></strong><br /><small th:if="${isRental}" th:text="|Loyer : ${loyer} | T.O.M. : ${tom} | TVA : ${tva}%|">Détail locatif</small></td>
             <td>
               <span
                 class="percentage-badge"
@@ -372,18 +376,18 @@
 
       <div class="payment-summary">
         <div style="font-size: 14px; color: #34495e; margin-bottom: 5px">
-          MONTANT À PAYER
+          <span th:text="${amountLabel}">MONTANT A PAYER</span>
         </div>
         <div class="amount-due" th:text="${currentAmount} "></div>
         <div class="due-date">
-          Date limite de paiement :
-          <span th:text="${paymentCall.expectedDate}"></span>
+          <span th:text="${dateLabel}">Date limite de paiement :</span>
+          <span th:text="${documentDate}"></span>
         </div>
       </div>
 
-      <div class="payment-instructions">
+      <div class="payment-instructions" th:if="${!isReceipt}">
         <strong>Instructions de paiement :</strong><br />
-        • Veuillez libeller votre paiement à l'ordre du promoteur<br />
+        • Veuillez libeller votre paiement à l'ordre du promoteur / bailleur<br />
         • Indiquer la référence VEFA
         <span th:text="${property.number}"></span> sur votre règlement<br />
         • Tout paiement effectué après la date limite pourra entraîner
@@ -394,14 +398,9 @@
     <div class="footer">
       <p>
         Document généré automatiquement - Fait à Dakar, le
-        <span
-          th:text="${#dates.format(#dates.createNow(), 'dd/MM/yyyy')}"
-        ></span>
+        <span th:text="${generatedDate}"></span>
       </p>
-      <p>
-        Ce document fait office d'appel de fonds conformément au contrat de
-        réservation VEFA
-      </p>
+      <p th:text="${footerText}">Ce document fait office d'appel de fonds conformément au contrat de réservation VEFA</p>
     </div>
   </body>
 </html>

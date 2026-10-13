@@ -54,6 +54,12 @@ public class PaymentCallServiceImpl implements PaymentCallService {
                 return withOverdueFlag(paymentCallRepository.findByRealEstatePropertyRecipientIdOrderByExpectedDateAsc(recipientId));
         }
 
+        @Override
+        @Transactional(readOnly = true)
+        public Optional<PaymentCall> getPaymentCall(Long id) {
+                return paymentCallRepository.findById(id);
+        }
+
         private List<PaymentCall> withOverdueFlag(List<PaymentCall> calls) {
                 calls.forEach(call -> call.setOverdue(isOverdue(call)));
                 return calls;
@@ -112,6 +118,11 @@ public class PaymentCallServiceImpl implements PaymentCallService {
 
                 if (totalPercentage > 100) {
                         throw new IllegalArgumentException("La somme des pourcentages dépasse 100%.");
+                }
+                if (!property.isRental() && totalPercentage >= 100
+                                && Math.abs(totalAmount - property.getPrice()) > 0.01) {
+                        throw new IllegalArgumentException(
+                                        "Lorsque les appels atteignent 100%, leur total doit être exactement égal au prix du lot.");
                 }
 
                 // Création du nouvel appel
@@ -186,6 +197,11 @@ public class PaymentCallServiceImpl implements PaymentCallService {
 
                         if (totalPercentage > 100) {
                                 throw new IllegalArgumentException("La somme des pourcentages dépasse 100%.");
+                        }
+                        if (!property.isRental() && totalPercentage >= 100
+                                        && Math.abs(totalAmount - property.getPrice()) > 0.01) {
+                                throw new IllegalArgumentException(
+                                                "Lorsque les appels atteignent 100%, leur total doit être exactement égal au prix du lot.");
                         }
 
                         // Mise à jour

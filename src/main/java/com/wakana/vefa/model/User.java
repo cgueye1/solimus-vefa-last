@@ -43,6 +43,7 @@ public class User implements UserDetails {
    private String telephone;
    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
    @JsonManagedReference
+   @JsonIgnore
    private List<Subscription> subscriptions;
 
    @OneToOne(mappedBy = "owner", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
@@ -68,6 +69,7 @@ public class User implements UserDetails {
    private String idCard;
    @ElementCollection
    @CollectionTable(name = "user_address_lots", joinColumns = @JoinColumn(name = "user_id"))
+   @JsonIgnore
    private List<AddressLot> adressLots;
 
    @Override

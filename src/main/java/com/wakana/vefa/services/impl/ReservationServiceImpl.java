@@ -16,12 +16,14 @@ import com.wakana.vefa.services.EmailService;
 import com.wakana.vefa.services.NotificationsService;
 import com.wakana.vefa.services.ReservationService;
 import com.wakana.vefa.exception.BusinessException;
+import com.wakana.vefa.util.PasswordUtil;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.time.Month;
@@ -33,6 +35,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.Locale;
 import org.springframework.http.HttpStatus;
 
 @Service
@@ -52,6 +55,9 @@ public class ReservationServiceImpl implements ReservationService {
         private RealEstatePropertyRepository propertyRepository;
         @Autowired
         private EmailService emailService;
+
+        @Autowired
+        private PasswordEncoder passwordEncoder;
 
         @Autowired
         private NotificationsService notificationsService;
@@ -76,35 +82,18 @@ public class ReservationServiceImpl implements ReservationService {
                         // =========================
                         // 2. Récupération ou création utilisateur
                         // =========================
-                        User user = userRepository.findByTelephone(request.getTelephone())
-                                        .or(() -> {
-                                                if (request.getEmail() != null && !request.getEmail().isBlank()) {
-                                                        return userRepository.findByEmail(request.getEmail());
-                                                }
-                                                return Optional.empty();
-                                        })
+                        String email = normalizeEmail(request.getEmail());
+                        User user = userRepository.findByEmail(email)
+                                        .or(() -> userRepository.findByTelephone(request.getTelephone().trim()))
                                         .orElseGet(() -> {
                                                 log.info("ℹ️ Aucun utilisateur trouvé → création d’un nouveau");
-                                                return createNewUser(request);
+                                                return createNewUser(request, email);
                                         });
 
                         log.info("✅ Utilisateur utilisé | id={} profil={}", user.getId(), user.getProfil());
 
                         // =========================
-                        // 3. Vérification profil
-                        // =========================
-                        if (user.getProfil() != ProfilEnum.RESERVATAIRE &&
-                                        user.getProfil() != ProfilEnum.TENANT) {
-
-                                log.warn("🚫 Profil non autorisé | userId={} profil={}",
-                                                user.getId(), user.getProfil());
-
-                                throw new IllegalStateException(
-                                                "Vous n’êtes pas autorisé à effectuer cette action.");
-                        }
-
-                        // =========================
-                        // 4. Récupération du bien
+                        // 3. Récupération du bien
                         // =========================
                         RealEstateProperty property = propertyRepository.findById(request.getPropertyId())
                                         .orElseThrow(() -> {
@@ -121,7 +110,7 @@ public class ReservationServiceImpl implements ReservationService {
                         log.info("🏠 Bien trouvé | id={} name={}", property.getId(), property.getName());
 
                         // =========================
-                        // 5. Vérification réservation existante
+                        // 4. Vérification réservation existante
                         // =========================
                         Optional<Reservation> existingReservation = reservationRepository
                                         .findByPropertyAndUser(property, user);
@@ -140,7 +129,7 @@ public class ReservationServiceImpl implements ReservationService {
                         }
 
                         // =========================
-                        // 6. Création réservation
+                        // 5. Création réservation
                         // =========================
                         Reservation reservation = new Reservation();
                         reservation.setUser(user);
@@ -154,7 +143,7 @@ public class ReservationServiceImpl implements ReservationService {
                         log.info("✅ Réservation créée | id={}", savedReservation.getId());
 
                         // =========================
-                        // 7. Notifications
+                        // 6. Notifications
                         // =========================
                         if (sendNotif) {
                                 log.info("📢 Envoi notifications");
@@ -176,35 +165,51 @@ public class ReservationServiceImpl implements ReservationService {
                                 + " vient de faire une manifestation d’intérêt pour le bien "
                                 + property.getName();
 
-                String htmlContent = emailService.getPropertyHTML(
-                                property,
-                                "Manifestation d'intérêt",
-                                message,
-                                "#0f056b");
+                try {
+                        String htmlContent = emailService.getPropertyHTML(
+                                        property,
+                                        "Manifestation d'intérêt",
+                                        message,
+                                        "#0f056b");
 
-                emailService.sendHtmlMessage(
-                                property.getPromoter().getEmail(),
-                                "Manifestation d'intérêt",
-                                htmlContent,
-                                null);
+                        emailService.sendHtmlMessage(
+                                        property.getPromoter().getEmail(),
+                                        "Manifestation d'intérêt",
+                                        htmlContent,
+                                        null);
+                } catch (Exception exception) {
+                        log.error("Échec de notification email pour la manifestation du bien {}",
+                                        property.getId(), exception);
+                }
 
-                notificationsService.sendReservationNotif(
-                                "Manifestation d'intérêt",
-                                message,
-                                property,
-                                property.getPromoter());
-
-                if (property.getAgency() != null) {
+                try {
                         notificationsService.sendReservationNotif(
                                         "Manifestation d'intérêt",
                                         message,
                                         property,
-                                        property.getAgency());
+                                        property.getPromoter());
+                } catch (Exception exception) {
+                        log.error("Échec de notification interne du promoteur pour le bien {}",
+                                        property.getId(), exception);
+                }
+
+                if (property.getAgency() != null) {
+                        try {
+                                notificationsService.sendReservationNotif(
+                                                "Manifestation d'intérêt",
+                                                message,
+                                                property,
+                                                property.getAgency());
+                        } catch (Exception exception) {
+                                log.error("Échec de notification interne de l'agence pour le bien {}",
+                                                property.getId(), exception);
+                        }
                 }
         }
 
-        private User createNewUser(ReservationRequest request) {
+        private User createNewUser(ReservationRequest request, String email) {
                 User user = new User();
+                String temporaryPassword = PasswordUtil.generateRandomPassword();
 
                 user.setProfil(request.isTenant()
                                 ? ProfilEnum.TENANT
@@ -212,14 +217,40 @@ public class ReservationServiceImpl implements ReservationService {
 
                 user.setPrenom(request.getPrenom());
                 user.setNom(request.getNom());
-                user.setEmail(request.getEmail());
-                user.setTelephone(request.getTelephone());
+                user.setEmail(email);
+                user.setTelephone(request.getTelephone().trim());
                 user.setActivated(true);
-                // passwordEncoder.encode("TEMP_PASSWORD")
-                // ⚠️ À remplacer par un vrai mot de passe hashé ou OTP
-                user.setPassword("dsjldskdlsdqlkqsdqjsdk");
+                user.setPassword(passwordEncoder.encode(temporaryPassword));
 
-                return userRepository.save(user);
+                User savedUser = userRepository.save(user);
+                sendTemporaryPasswordEmail(savedUser, temporaryPassword);
+                return savedUser;
+        }
+
+        private String normalizeEmail(String email) {
+                if (email == null || email.isBlank()) {
+                        throw new IllegalArgumentException("L’adresse e-mail est obligatoire");
+                }
+                return email.trim().toLowerCase(Locale.ROOT);
+        }
+
+        private void sendTemporaryPasswordEmail(User user, String temporaryPassword) {
+                String html = String.format(
+                                "<div style='font-family:sans-serif;max-width:480px;margin:auto'>" +
+                                                "<h2 style='color:#1e3a8a'>Votre accès Solimus</h2>" +
+                                                "<p>Bonjour <strong>%s %s</strong>,</p>" +
+                                                "<p>Un compte Solimus a été créé pour votre manifestation d’intérêt.</p>" +
+                                                "<p>Votre mot de passe temporaire :</p>" +
+                                                "<div style='background:#f4f7ff;padding:16px;text-align:center;font-size:1.3em;font-weight:bold;color:#1e3a8a'>%s</div>" +
+                                                "<p>Changez-le après votre première connexion.</p>" +
+                                                "<p>Cordialement,<br><strong>L’équipe Solimus</strong></p>" +
+                                                "</div>",
+                                user.getPrenom(), user.getNom(), temporaryPassword);
+                try {
+                        emailService.sendHtmlMessage(user.getEmail(), "Votre accès Solimus", html, null);
+                } catch (Exception exception) {
+                        log.error("Échec de l’envoi du mot de passe temporaire à {}", user.getEmail(), exception);
+                }
         }
 
         @Override

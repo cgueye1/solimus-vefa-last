@@ -14,6 +14,8 @@ public interface PaymentCallService {
 
     List<PaymentCall> getPaymentCallsForRecipient(Long recipientId);
 
+    Optional<PaymentCall> getPaymentCall(Long id);
+
     PaymentCall createPaymentCall(PaymentCallRequest paymentCallRequest);
 
     Optional<PaymentCall> updatePaymentCall(Long id, PaymentCallRequest paymentCallRequest);

@@ -29,7 +29,6 @@ public class ReservationController {
 
     // Create a new reservation
     @PostMapping
-    @PreAuthorize("hasAuthority('RESERVATAIRE')")
     public ResponseEntity<Reservation> createReservation(@RequestBody ReservationRequest reservationRequest) {
         log.info("🚀 API /api/reservations appelée");
         Reservation reservation = reservationService.createReservation(reservationRequest, true);

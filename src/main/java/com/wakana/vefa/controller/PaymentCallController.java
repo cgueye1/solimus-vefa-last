@@ -8,9 +8,13 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import com.wakana.vefa.dto.PaymentCallRequest;
 import com.wakana.vefa.dto.response.CallForChargeKpiResponse;
 import com.wakana.vefa.dto.response.PaymentCallKpiDto;
+import com.wakana.vefa.services.PaymentCallPdfService;
+import com.wakana.vefa.enums.PaymentCallStatusEnum;
 
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
@@ -27,6 +31,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class PaymentCallController {
 
     private final PaymentCallService paymentCallService;
+    private final PaymentCallPdfService paymentCallPdfService;
 
     @GetMapping("/property/{propertyId}")
     public List<PaymentCall> getPaymentCallsByProperty(@PathVariable Long propertyId) {
@@ -40,6 +45,23 @@ public class PaymentCallController {
         }
         return ResponseEntity.ok(paymentCallService.getPaymentCallsForRecipient(currentUser.getId()));
     }
+
+        @GetMapping(value = { "/{id}/receipt", "/{id}/pdf" }, produces = MediaType.APPLICATION_PDF_VALUE)
+        public ResponseEntity<byte[]> downloadPaymentCallReceipt(@PathVariable Long id) {
+        PaymentCall paymentCall = paymentCallService.getPaymentCall(id)
+            .orElseThrow(() -> new EntityNotFoundException("Appel de fonds introuvable"));
+        if (paymentCall.getStatus() != PaymentCallStatusEnum.PAID) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        }
+
+        byte[] pdf = paymentCallPdfService.generateReceiptPdf(paymentCall);
+        String filename = "quittance-" + id + ".pdf";
+
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+            .contentType(MediaType.APPLICATION_PDF)
+            .body(pdf);
+        }
 
     @PostMapping
     @PreAuthorize("hasAuthority('PROMOTEUR')")

@@ -6,6 +6,8 @@ public interface PaymentCallPdfService {
 
     byte[] generatePdf(PaymentCall paymentCall);
 
+    byte[] generateReceiptPdf(PaymentCall paymentCall);
+
     void sendPaymentCallByEmail(PaymentCall paymentCall);
 
 }
