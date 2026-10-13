@@ -1,25 +1,19 @@
 
 
 package com.wakana.vefa.util;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import javax.net.ssl.HttpsURLConnection;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.URL;
-import java.net.URLEncoder;
 
 @Component
 public class OTPUtil {
 
+    private static final long OTP_VALIDITY_MILLIS = 2 * 60 * 1000L;
   
     
     
@@ -34,7 +28,7 @@ public class OTPUtil {
 
 
     public void storeOTP(String phoneNumber, String otp) {
-        otpStorage.put(phoneNumber, new OtpInfo(otp, System.currentTimeMillis() + 5 * 60 * 1000));
+        otpStorage.put(phoneNumber, new OtpInfo(otp, System.currentTimeMillis() + OTP_VALIDITY_MILLIS));
     }
 
     public boolean validateOTP(String phoneNumber, String otp) {

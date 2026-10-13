@@ -76,21 +76,16 @@ public class AuthenticationController {
     @PostMapping("/password/reset")
 
     public ResponseEntity<?> resetPassword(@RequestBody ChangePasswordRequest changePasswordRequest) {
-       /*  String errorMessage = "Le numero de telephone est incorrecte";
-        User user = userRepository.findByTelephone(changePasswordRequest.getEmail())
-                .orElseGet(() -> userRepository.findByEmail(changePasswordRequest.getEmail())
-                        .orElseThrow(() -> new IllegalArgumentException("Invalid email or password")));
-
-        if (null == user) {
-            return ResponseEntity
-                    .status(HttpStatus.OK)
-                    .body(Collections.singletonMap("error", errorMessage));
-        }*/
-
-        authenticationService.resetPassword(changePasswordRequest);
-
-        return ResponseEntity
-                .ok("Votre nouveau mot de passe est envoyé sur l'adresse mail :" + changePasswordRequest.getEmail());
+        try {
+            authenticationService.resetPassword(changePasswordRequest);
+            return ResponseEntity.ok(Collections.singletonMap(
+                "message", "Un nouveau mot de passe a été envoyé par e-mail."));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Collections.singletonMap(
+                "error", "Le mot de passe n'a pas pu être envoyé par e-mail."));
+        }
 
     }
 

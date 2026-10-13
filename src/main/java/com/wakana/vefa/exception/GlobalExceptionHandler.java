@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -73,6 +74,19 @@ public class GlobalExceptionHandler {
                 errorMessage,
                 request.getRequestURI()));
     }
+
+        // ── JSON invalide ────────────────────────────────────────────────────────
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<ApiErrorResponse> handleUnreadableMessage(
+                        HttpMessageNotReadableException ex, HttpServletRequest request) {
+                log.warn("[HTTP] Requête JSON invalide sur {}", request.getRequestURI());
+                return ResponseEntity.badRequest().body(new ApiErrorResponse(
+                                LocalDateTime.now(),
+                                HttpStatus.BAD_REQUEST.value(),
+                                "INVALID_JSON",
+                                "La requête est invalide. Vérifiez les champs saisis et réessayez.",
+                                request.getRequestURI()));
+        }
 
     // ── RuntimeException ──────────────────────────────────────────────────────
     @ExceptionHandler(RuntimeException.class)

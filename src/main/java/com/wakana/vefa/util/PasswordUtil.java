@@ -26,8 +26,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Utilitaire de génération de mots de passe forts.
- * Garantit la présence de tous les types de caractères requis.
+ * Utilitaire de génération de mots de passe temporaires alphanumériques.
  */
 public class PasswordUtil {
 
@@ -36,16 +35,15 @@ public class PasswordUtil {
     private static final String UPPERCASE  = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private static final String LOWERCASE  = "abcdefghijklmnopqrstuvwxyz";
     private static final String DIGITS     = "0123456789";
-    private static final String SPECIALS   = "!@#$%^&*()-_=+[]{}|;:,.<>?";
-    private static final String ALL_CHARS  = UPPERCASE + LOWERCASE + DIGITS + SPECIALS;
+    private static final String ALL_CHARS  = UPPERCASE + LOWERCASE + DIGITS;
 
     private static final int DEFAULT_LENGTH = 12;
 
     private PasswordUtil() {}
 
     /**
-     * Génère un mot de passe fort de longueur par défaut (12 caractères).
-     * Garantit : 1 majuscule, 1 minuscule, 2 chiffres, 2 spéciaux.
+    * Génère un mot de passe alphanumérique de longueur par défaut (12 caractères).
+    * Garantit : 1 majuscule, 1 minuscule et 2 chiffres.
      */
     public static String generateRandomPassword() {
         return generateRandomPassword(DEFAULT_LENGTH);
@@ -59,13 +57,11 @@ public class PasswordUtil {
 
         List<Character> chars = new ArrayList<>();
 
-        // Garantir au moins 1 de chaque type requis
+        // Garantir un mot de passe lisible et suffisamment varié.
         chars.add(randomChar(UPPERCASE));
         chars.add(randomChar(LOWERCASE));
         chars.add(randomChar(DIGITS));
         chars.add(randomChar(DIGITS));
-        chars.add(randomChar(SPECIALS));
-        chars.add(randomChar(SPECIALS));
 
         // Remplir le reste avec des caractères aléatoires
         for (int i = chars.size(); i < length; i++) {

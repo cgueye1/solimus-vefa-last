@@ -1,14 +1,14 @@
 
 package com.wakana.vefa.controller;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import com.wakana.vefa.dto.OTPRequest;
@@ -16,7 +16,6 @@ import com.wakana.vefa.dto.OTPRequest1;
 import com.wakana.vefa.model.User;
 import com.wakana.vefa.repository.UserRepository;
 import com.wakana.vefa.services.EmailService;
-import com.wakana.vefa.services.WhatsAppOtpService;
 import com.wakana.vefa.util.OTPUtil;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,47 +31,58 @@ public class OtpController {
 
     private final OTPUtil otpUtil;
 
-    private final WhatsAppOtpService whatsAppOtpService;
     private final UserRepository userRepository;
     private final EmailService emailService;
 
+    @Value("${otp.test-email:}")
+    private String testEmail;
+
     @PostMapping("/send")
-    ResponseEntity<?> generateAndSendOTP(@RequestBody OTPRequest1 oTPRequests) throws Exception {
+    ResponseEntity<?> generateAndSendOTP(@RequestBody OTPRequest1 oTPRequests) {
         String otp = otpUtil.generateOTP();
         String phoneNumber = oTPRequests.getPhoneNumber();
         String normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
-        String message = otp + " est votre code de validation.";
-        boolean whatsappSent = false;
-        boolean emailSent = false;
+        Optional<User> user = findAuthenticatedUser()
+            .or(() -> Optional.ofNullable(oTPRequests.getSignerId()).flatMap(userRepository::findById))
+            .or(() -> userRepository.findByTelephone(phoneNumber))
+            .or(() -> userRepository.findByTelephone(normalizedPhoneNumber));
+
+        if (user.isEmpty() || user.get().getEmail() == null || user.get().getEmail().isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Collections.singletonMap("error", "Aucune adresse e-mail n'est associée à cet utilisateur."));
+        }
 
         try {
-            whatsAppOtpService.sendOtp(normalizedPhoneNumber, otp);
-            whatsappSent = true;
-        } catch (Exception e) {
-            log.warn("Échec d'envoi OTP par WhatsApp pour {}: {}", phoneNumber, e.getMessage());
-        }
+            String message = otp + " est votre code de validation.";
+            String userEmail = user.get().getEmail().trim();
+            emailService.sendHtmlMessage(userEmail, "Code de validation Solimus", message, null);
 
-        Optional<User> user = userRepository.findByTelephone(phoneNumber)
-            .or(() -> userRepository.findByTelephone(normalizedPhoneNumber));
-        if (user.isPresent() && user.get().getEmail() != null && !user.get().getEmail().isBlank()) {
-            try {
-                emailService.sendHtmlMessage(user.get().getEmail(), "Code de validation Solimus", message, null);
-                emailSent = true;
-            } catch (Exception e) {
-                log.warn("Échec d'envoi OTP par e-mail pour {}: {}", phoneNumber, e.getMessage());
+            if (testEmail != null && !testEmail.isBlank()
+                    && !testEmail.trim().equalsIgnoreCase(userEmail)) {
+                try {
+                    emailService.sendHtmlMessage(testEmail.trim(), "Code de validation Solimus", message, null);
+                } catch (Exception e) {
+                    log.warn("Échec d'envoi OTP vers l'e-mail de test: {}", e.getMessage());
+                }
             }
-        }
 
-        if (whatsappSent || emailSent) {
             otpUtil.storeOTP(normalizedPhoneNumber, otp);
-            String channels = whatsappSent && emailSent ? "WhatsApp et e-mail"
-                : whatsappSent ? "WhatsApp" : "e-mail";
             return ResponseEntity.ok(Collections.singletonMap(
-                    "message", "Votre code a été envoyé par " + channels + "."));
+                    "message", "Votre code a été envoyé par e-mail."));
+        } catch (Exception e) {
+            log.warn("Échec d'envoi OTP par e-mail pour l'utilisateur {}: {}", user.get().getId(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(Collections.singletonMap("error", "Impossible d'envoyer le code par e-mail."));
         }
+    }
 
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                .body(Collections.singletonMap("error", "Impossible d'envoyer le code de validation."));
+    private Optional<User> findAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return Optional.empty();
+        }
+        return userRepository.findByEmailOrTelephone(authentication.getName());
     }
 
     private String normalizePhoneNumber(String phoneNumber) {
@@ -95,7 +105,7 @@ public class OtpController {
 
     @PostMapping("/validate")
     public boolean validateOTP(@RequestBody OTPRequest oTPRequests) {
-        if (otpUtil.validateOTP(oTPRequests.getPhoneNumber(), oTPRequests.getOtp())) {
+        if (otpUtil.validateOTP(normalizePhoneNumber(oTPRequests.getPhoneNumber()), oTPRequests.getOtp())) {
             return true;
         } else {
             return false;

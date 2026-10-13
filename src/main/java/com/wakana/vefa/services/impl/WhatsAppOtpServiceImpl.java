@@ -2,81 +2,76 @@ package com.wakana.vefa.services.impl;
 
 import com.wakana.vefa.services.WhatsAppOtpService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
 public class WhatsAppOtpServiceImpl implements WhatsAppOtpService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
-    @Value("${whatsapp.graph.version}")
-    private String graphVersion;
+        private static final String GRAPH_VERSION = "v25.0";
+        private static final String PHONE_NUMBER_ID = "996688440202981";
+        private static final String TEMPLATE_NAME = "otp_code";
+        private static final String TEMPLATE_LANGUAGE = "en";
+        private static final String TEST_RECIPIENT = "221774262278";
 
-    @Value("${whatsapp.phone-number-id}")
-    private String phoneNumberId;
-
-    @Value("${whatsapp.access-token}")
-    private String accessToken;
-
-    @Value("${whatsapp.otp.template}")
-    private String templateName;
-
-    @Value("${whatsapp.otp.language}")
-    private String templateLanguage;
-
-    @Value("${whatsapp.otp.button-parameter}")
-    private String buttonParameter;
-
-        @Value("${whatsapp.test-mode:false}")
-        private boolean testMode;
-
-        @Value("${whatsapp.test-phone-number:}")
-        private String testPhoneNumber;
+            private final HttpClient httpClient = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .build();
 
     @Override
     public void sendOtp(String phoneNumber, String otp) {
-        String recipient = testMode
-                ? normalizePhoneNumber(testPhoneNumber)
-                : normalizePhoneNumber(phoneNumber);
-        String endpoint = "https://graph.facebook.com/" + graphVersion + "/"
-                + phoneNumberId + "/messages";
+        String accessToken = System.getenv("WHATSAPP_ACCESS_TOKEN");
+        if (accessToken == null || accessToken.isBlank()) {
+            throw new IllegalStateException("WHATSAPP_ACCESS_TOKEN est obligatoire.");
+        }
 
-        Map<String, Object> requestBody = Map.of(
-                "messaging_product", "whatsapp",
-                "to", recipient,
-                "type", "template",
-                "template", Map.of(
-                        "name", templateName,
-                        "language", Map.of("code", templateLanguage),
-                        "components", List.of(
-                                Map.of(
-                                        "type", "body",
-                                        "parameters", List.of(Map.of(
-                                                "type", "text",
-                                                "text", otp))),
-                                Map.of(
-                                        "type", "button",
-                                        "sub_type", "url",
-                                        "index", "0",
-                                        "parameters", List.of(Map.of(
-                                                "type", "text",
-                                                "text", buttonParameter))))));
+        String body = "{"
+                + "\"messaging_product\":\"whatsapp\","
+                + "\"to\":\"" + escape(TEST_RECIPIENT) + "\","
+                + "\"type\":\"template\","
+                + "\"template\":{"
+                + "\"name\":\"" + TEMPLATE_NAME + "\","
+                + "\"language\":{\"code\":\"" + TEMPLATE_LANGUAGE + "\"},"
+                + "\"components\":["
+                + "{\"type\":\"body\",\"parameters\":[{\"type\":\"text\",\"text\":\""
+                + escape(otp) + "\"}]},"
+                + "{\"type\":\"button\",\"sub_type\":\"url\",\"index\":\"0\","
+                + "\"parameters\":[{\"type\":\"text\",\"text\":\"" + escape(otp) + "\"}]}"
+                + "]}"
+                + "}";
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(accessToken);
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        String endpoint = "https://graph.facebook.com/" + GRAPH_VERSION + "/"
+                + PHONE_NUMBER_ID + "/messages";
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(endpoint))
+                .timeout(Duration.ofSeconds(15))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
 
-        restTemplate.postForEntity(endpoint,
-                new HttpEntity<>(requestBody, headers),
-                String.class);
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException("Erreur WhatsApp API (" + response.statusCode() + ")");
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Impossible de joindre l'API WhatsApp.", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Envoi WhatsApp interrompu.", e);
+        }
+    }
+
+    private static String escape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private String normalizePhoneNumber(String phoneNumber) {

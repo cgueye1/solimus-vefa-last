@@ -44,7 +44,7 @@ public class EmailServiceImpl implements EmailService {
             }
             emailSender.send(message);
         } catch (MessagingException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Impossible de préparer l'e-mail.", e);
         }
 
     }

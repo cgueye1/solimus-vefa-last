@@ -333,13 +333,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .orElseGet(() -> userRepository.findByEmail(changePassword.getEmail())
                         .orElseThrow(() -> new IllegalArgumentException("Utilisateur introuvable.")));
 
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new IllegalArgumentException("Aucune adresse e-mail n'est associée à cet utilisateur.");
+        }
+
         // Générer un mot de passe fort
         String newPassword = PasswordUtil.generateRandomPassword();
-        user.setPassword(passwordEncoder.encode(newPassword));
 
         String html = buildTempPasswordEmail(user.getPrenom(), user.getNom(), newPassword);
-        safelySendEmail(changePassword.getEmail(), "Réinitialisation de votre mot de passe Solimus", html);
+        emailService.sendHtmlMessage(user.getEmail(), "Réinitialisation de votre mot de passe Solimus", html, null);
 
+        user.setPassword(passwordEncoder.encode(newPassword));
         log.info("[Auth] Mot de passe réinitialisé pour userId={}", user.getId());
         return userRepository.save(user);
     }
