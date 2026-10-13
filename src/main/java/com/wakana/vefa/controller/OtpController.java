@@ -40,18 +40,20 @@ public class OtpController {
     ResponseEntity<?> generateAndSendOTP(@RequestBody OTPRequest1 oTPRequests) throws Exception {
         String otp = otpUtil.generateOTP();
         String phoneNumber = oTPRequests.getPhoneNumber();
+        String normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
         String message = otp + " est votre code de validation.";
         boolean whatsappSent = false;
         boolean emailSent = false;
 
         try {
-            whatsAppOtpService.sendOtp(phoneNumber, otp);
+            whatsAppOtpService.sendOtp(normalizedPhoneNumber, otp);
             whatsappSent = true;
         } catch (Exception e) {
             log.warn("Échec d'envoi OTP par WhatsApp pour {}: {}", phoneNumber, e.getMessage());
         }
 
-        Optional<User> user = userRepository.findByTelephone(phoneNumber);
+        Optional<User> user = userRepository.findByTelephone(phoneNumber)
+            .or(() -> userRepository.findByTelephone(normalizedPhoneNumber));
         if (user.isPresent() && user.get().getEmail() != null && !user.get().getEmail().isBlank()) {
             try {
                 emailService.sendHtmlMessage(user.get().getEmail(), "Code de validation Solimus", message, null);
@@ -62,7 +64,7 @@ public class OtpController {
         }
 
         if (whatsappSent || emailSent) {
-            otpUtil.storeOTP(phoneNumber, otp);
+            otpUtil.storeOTP(normalizedPhoneNumber, otp);
             String channels = whatsappSent && emailSent ? "WhatsApp et e-mail"
                 : whatsappSent ? "WhatsApp" : "e-mail";
             return ResponseEntity.ok(Collections.singletonMap(
@@ -71,6 +73,24 @@ public class OtpController {
 
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(Collections.singletonMap("error", "Impossible d'envoyer le code de validation."));
+    }
+
+    private String normalizePhoneNumber(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.isBlank()) {
+            throw new IllegalArgumentException("Le numéro de téléphone est obligatoire.");
+        }
+
+        String normalized = phoneNumber.replaceAll("[^0-9]", "");
+        if (normalized.startsWith("00")) {
+            normalized = normalized.substring(2);
+        }
+        if (normalized.length() == 9) {
+            normalized = "221" + normalized;
+        }
+        if (normalized.length() < 10) {
+            throw new IllegalArgumentException("Le numéro de téléphone est invalide.");
+        }
+        return normalized;
     }
 
     @PostMapping("/validate")

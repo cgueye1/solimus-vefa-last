@@ -35,9 +35,17 @@ public class WhatsAppOtpServiceImpl implements WhatsAppOtpService {
     @Value("${whatsapp.otp.button-parameter}")
     private String buttonParameter;
 
+        @Value("${whatsapp.test-mode:false}")
+        private boolean testMode;
+
+        @Value("${whatsapp.test-phone-number:}")
+        private String testPhoneNumber;
+
     @Override
     public void sendOtp(String phoneNumber, String otp) {
-        String recipient = normalizePhoneNumber(phoneNumber);
+        String recipient = testMode
+                ? normalizePhoneNumber(testPhoneNumber)
+                : normalizePhoneNumber(phoneNumber);
         String endpoint = "https://graph.facebook.com/" + graphVersion + "/"
                 + phoneNumberId + "/messages";
 
@@ -77,6 +85,12 @@ public class WhatsAppOtpServiceImpl implements WhatsAppOtpService {
         }
 
         String normalized = phoneNumber.replaceAll("[^0-9]", "");
+                if (normalized.startsWith("00")) {
+                        normalized = normalized.substring(2);
+                }
+                if (normalized.length() == 9) {
+                        normalized = "221" + normalized;
+                }
         if (normalized.isBlank()) {
             throw new IllegalArgumentException("Le numéro WhatsApp est invalide.");
         }
