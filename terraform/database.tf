@@ -64,7 +64,7 @@ resource "aws_db_instance" "mysql" {
   deletion_protection = true
 
   skip_final_snapshot       = false
-  final_snapshot_identifier = "${var.project}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  final_snapshot_identifier = "${var.project}-db-final"
 
   tags = {
     Name = "${var.project}-mysql"
