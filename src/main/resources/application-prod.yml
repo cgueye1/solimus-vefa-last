@@ -28,6 +28,10 @@ spring:
     init:
       mode: never
 
+# MinIO disabled in production (using S3 instead)
+minio:
+  enabled: false
+
   # Flyway : sur une base déjà remplie, marque l'état actuel comme version 1
   flyway:
     enabled: true

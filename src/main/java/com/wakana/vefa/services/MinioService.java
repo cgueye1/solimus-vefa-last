@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -16,6 +17,7 @@ import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 
 @Service
+@ConditionalOnProperty(name = "minio.enabled", havingValue = "true", matchIfMissing = true)
 public class MinioService {
 
     private final MinioClient minioClient;
