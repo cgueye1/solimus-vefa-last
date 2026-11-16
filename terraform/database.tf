@@ -24,7 +24,7 @@ resource "aws_ssm_parameter" "db_password" {
 
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project}-db-subnet-group"
-  subnet_ids = [aws_subnet.public.id, aws_subnet.private.id]
+  subnet_ids = [aws_subnet.private.id, aws_subnet.private_2.id]
 
   tags = {
     Name = "${var.project}-db-subnet-group"
@@ -63,7 +63,7 @@ resource "aws_db_instance" "mysql" {
   # Deletion protection for production
   deletion_protection = true
 
-  skip_final_snapshot       = false
+  skip_final_snapshot       = true
   final_snapshot_identifier = "${var.project}-db-final"
 
   tags = {
@@ -79,8 +79,8 @@ resource "aws_db_instance" "mysql" {
 # ====== RDS PARAMETER GROUP (for MySQL) ======
 
 resource "aws_db_parameter_group" "mysql" {
-  name   = "${var.project}-mysql-params"
-  family = "mysql${replace(var.db_engine_version, ".", "")}"
+  name   = "${var.project}-mysql-params-${substr(md5(timestamp()), 0, 8)}"
+  family = "mysql${var.db_engine_version}"
 
   # Connection and performance parameters
   parameter {

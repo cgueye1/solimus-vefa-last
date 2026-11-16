@@ -76,7 +76,7 @@ resource "aws_iam_role_policy_attachment" "backend_ssm_policy" {
   role       = aws_iam_role.backend_ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
-
+# 
 # ====== IAM INSTANCE PROFILE ======
 
 resource "aws_iam_instance_profile" "backend_ec2_profile" {
@@ -140,7 +140,23 @@ resource "aws_eip" "backend" {
 
   depends_on = [aws_internet_gateway.main]
 }
-
+# 
+# # ====== DATA SOURCE: UBUNTU AMI ======
+# 
+# data "aws_ami" "ubuntu" {
+#   most_recent = true
+#   owners      = ["099720109477"] # Canonical
+# 
+#   filter {
+#     name   = "name"
+#     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+#   }
+# 
+#   filter {
+#     name   = "virtualization-type"
+#     values = ["hvm"]
+#   }
+# 
 # ====== DATA SOURCE: UBUNTU AMI ======
 
 data "aws_ami" "ubuntu" {
@@ -150,11 +166,6 @@ data "aws_ami" "ubuntu" {
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
   }
 
   filter {

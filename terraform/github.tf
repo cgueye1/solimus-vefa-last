@@ -30,7 +30,7 @@ resource "aws_iam_role" "github_backend_role" {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_back_repo}:*"
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_back_repo}:ref:refs/heads/prod-aws"
           }
         }
       }
@@ -61,7 +61,7 @@ resource "aws_iam_role" "github_frontend_role" {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_front_repo}:*"
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_front_repo}:ref:refs/heads/prod-aws"
           }
         }
       }

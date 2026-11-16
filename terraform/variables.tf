@@ -67,6 +67,12 @@ variable "private_subnet_cidr" {
   default     = "10.0.2.0/24"
 }
 
+variable "private_subnet_cidr_2" {
+  description = "CIDR block for second private subnet (RDS Multi-AZ requirement)"
+  type        = string
+  default     = "10.0.3.0/24"
+}
+
 # ====== DATABASE ======
 
 variable "db_name" {
@@ -106,9 +112,9 @@ variable "db_storage" {
 }
 
 variable "db_backup_retention" {
-  description = "Database backup retention days"
+  description = "Database backup retention days (0 for free tier, no backups)"
   type        = number
-  default     = 7
+  default     = 0
 }
 
 # ====== EC2 / BACKEND ======

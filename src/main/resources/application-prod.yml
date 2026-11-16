@@ -75,6 +75,16 @@ spring:
   websocket:
     path: /ws
 
+# Management/Actuator Configuration (Health Check)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never  # Never expose internal details publicly
+
 # Server Configuration
 server:
   port: ${SERVER_PORT:8086}
