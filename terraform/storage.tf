@@ -143,9 +143,9 @@ resource "aws_s3_bucket_policy" "frontend" {
 # ====== CLOUDFRONT DISTRIBUTION FOR FILES BUCKET ======
 
 resource "aws_cloudfront_distribution" "files" {
-  enabled      = true
-  comment      = "${var.project} files distribution"
-  price_class  = "PriceClass_200"
+  enabled     = true
+  comment     = "${var.project} files distribution"
+  price_class = "PriceClass_200" # Only US, Europe, and Asia-Pacific edge locations (cost optimization)
 
   origin {
     domain_name = aws_s3_bucket.files.bucket_regional_domain_name
@@ -199,9 +199,9 @@ resource "aws_cloudfront_origin_access_identity" "files" {
 # ====== CLOUDFRONT DISTRIBUTION FOR FRONTEND ======
 
 resource "aws_cloudfront_distribution" "frontend" {
-  enabled      = true
-  comment      = "${var.project} frontend distribution"
-  price_class  = "PriceClass_200"
+  enabled     = true
+  comment     = "${var.project} frontend distribution"
+  price_class = "PriceClass_200" # Only US, Europe, and Asia-Pacific edge locations (cost optimization)
 
   origin {
     domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name

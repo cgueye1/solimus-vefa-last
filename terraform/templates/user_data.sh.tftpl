@@ -196,24 +196,15 @@ datetime_format = %Y-%m-%d %H:%M:%S
 file = /var/log/solimus-vefa/*.log
 AWSLOGS
 
-# ====== INSTALL DOCKER COMPOSE V2 ======
-curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
-
-# ====== CLONE PROJECT REPOSITORY ======
-cd /opt/solimus-vefa
-sudo -u ubuntu git clone https://github.com/cgueye1/solimus-vefa-last.git .
-sudo chown -R ubuntu:ubuntu /opt/solimus-vefa
-
-# ====== BUILD DOCKER IMAGE ======
-echo "Building Docker image (this may take 5-10 minutes)..."
-docker build -t ${backend_image} .
+# ====== PULL DOCKER IMAGE AND START CONTAINER ======
+# Note: The image should already be pushed to ECR or Docker Hub
+# Adjust the image pull command based on your registry
 
 echo "Waiting for dependencies to be ready..."
 sleep 30
 
-# ====== START CONTAINERS ======
-docker-compose pull || echo "No external images to pull"
+cd /opt/solimus-vefa
+docker-compose pull
 docker-compose up -d
 
 # ====== START CADDY ======
