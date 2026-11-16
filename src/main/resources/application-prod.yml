@@ -1,0 +1,146 @@
+spring:
+  profiles: prod
+  application:
+    name: solimus-vefa-backend
+  
+  # Database Configuration (Production - AWS RDS)
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      idle-timeout: 900000
+      max-lifetime: 1800000
+  
+  # JPA/Hibernate Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate  # NEVER use 'create-drop' or 'update' in production!
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false  # Disable in production for performance
+        generate_statistics: false
+  
+  sql:
+    init:
+      mode: never  # Don't initialize database in production
+  
+  # Flyway for database migrations (IMPORTANT FOR PRODUCTION)
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    out-of-order: false  # Strict migration ordering in prod
+  
+  # Mail Configuration
+  mail:
+    host: ${SPRING_MAIL_HOST}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME}
+    password: ${SPRING_MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            trust: ssl0.ovh.net
+  
+  # Multipart file upload
+  servlet:
+    multipart:
+      max-file-size: 500MB  # Smaller limit for production
+      max-request-size: 500MB
+  
+  # Compression
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 2048
+  
+  # Cache Configuration
+  cache:
+    type: caffeine
+    cache-names: properties,dashboard,stats,lists,progressAlbums
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=300s  # Longer cache in prod
+  
+  # WebSocket Configuration
+  websocket:
+    path: /ws
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8086}
+  forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:framework}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  ssl:
+    enabled: ${SERVER_SSL_ENABLED:false}  # SSL handled by Caddy/Load Balancer
+
+# Logging Configuration
+logging:
+  level:
+    root: WARN
+    org.springframework.web: WARN
+    org.springframework.security: INFO
+    com.wakana.vefa: INFO
+  file:
+    name: /var/log/solimus-vefa/application.log
+    max-size: 10MB
+    max-history: 30
+
+# Application Configuration
+app:
+  front-url: ${FRONT_URL:https://vefa.solimus.sn}
+  api-url: ${API_URL:https://api.vefa.solimus.sn}
+  payment-ipn-url: ${PAYMENT_IPN_URL:https://api.vefa.solimus.sn/api/payment/ipn}
+
+# Storage Configuration (AWS S3 for production - NO credentials, using IAM role)
+storage:
+  type: ${STORAGE_TYPE:s3}
+  endpoint: ${STORAGE_ENDPOINT:}  # Leave empty for S3
+  path-style: ${STORAGE_PATH_STYLE:false}  # S3 uses virtual-hosted-style
+  access-key: ${STORAGE_ACCESS_KEY:}  # Leave empty - use IAM role
+  secret-key: ${STORAGE_SECRET_KEY:}  # Leave empty - use IAM role
+  bucket: ${FILES_BUCKET:solimus-vefa-files}
+  region: ${AWS_REGION:eu-west-3}
+
+# Angular/Frontend URLs
+angular:
+  url:
+    success: ${ANGULAR_URL_SUCCESS:https://vefa.solimus.sn/#/settings/accounts?status=success}
+    failed: ${ANGULAR_URL_FAILED:https://vefa.solimus.sn/#/settings/accounts?status=failed}
+
+# WhatsApp Configuration
+whatsapp:
+  graph:
+    version: ${WHATSAPP_GRAPH_VERSION:v25.0}
+  phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID}
+  access-token: ${WHATSAPP_ACCESS_TOKEN}
+  otp:
+    template: ${WHATSAPP_OTP_TEMPLATE:otp_code}
+    language: ${WHATSAPP_OTP_LANGUAGE:en}
+    button-parameter: ${WHATSAPP_OTP_BUTTON_PARAMETER:123456}
+  test-mode: ${WHATSAPP_TEST_MODE:false}
+  test-phone-number: ${WHATSAPP_TEST_PHONE_NUMBER:}
+
+# OTP Configuration
+otp:
+  test-email: ${OTP_TEST_EMAIL:}
+
+# API Documentation (Disable in production if not needed)
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: ${SWAGGER_ENABLED:true}
+    try-it-out-enabled: false  # Disable try-it-out in production

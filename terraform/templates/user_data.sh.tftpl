@@ -1,0 +1,216 @@
+#!/bin/bash
+# EC2 User Data Script for Solimus Vefa Backend
+# This script is executed when the EC2 instance starts
+
+set -e
+
+# ====== LOGGING ======
+exec > /var/log/solimus-vefa-init.log 2>&1
+echo "Starting EC2 initialization at $(date)"
+
+# ====== UPDATE SYSTEM ======
+apt-get update
+apt-get install -y \
+  curl \
+  wget \
+  git \
+  htop \
+  awscli \
+  jq \
+  docker.io
+
+# ====== START DOCKER ======
+systemctl start docker
+systemctl enable docker
+usermod -aG docker ubuntu
+
+# ====== CREATE APPLICATION DIRECTORIES ======
+mkdir -p /opt/solimus-vefa
+mkdir -p /var/log/solimus-vefa
+chown -R ubuntu:ubuntu /opt/solimus-vefa /var/log/solimus-vefa
+
+# ====== RETRIEVE DB PASSWORD FROM SSM PARAMETER STORE ======
+DB_PASSWORD=$(aws ssm get-parameter \
+  --name "/${project}/db/password" \
+  --with-decryption \
+  --query 'Parameter.Value' \
+  --output text \
+  --region ${aws_region})
+
+if [ -z "$DB_PASSWORD" ]; then
+    echo "ERROR: Failed to retrieve database password from SSM Parameter Store"
+    exit 1
+fi
+
+# ====== INSTALL CADDY (Reverse Proxy with HTTPS) ======
+apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.caddy.community/api/publish/archives/deb/config.json' | \
+  jq -r '.body | to_entries[] | select(.value.os=="linux") | select(.value.arch=="amd64") | .value.link' | \
+  head -1 | xargs curl -1sL | tar x -C /tmp
+mv /tmp/caddy /usr/bin/caddy
+chmod +x /usr/bin/caddy
+
+# Create Caddyfile
+cat > /etc/caddy/Caddyfile << 'EOF'
+# Caddy configuration for Solimus Vefa
+{
+  admin off
+  log {
+    output file /var/log/caddy/access.log
+    format json
+  }
+}
+
+# API Domain
+${api_domain} {
+  reverse_proxy localhost:${backend_port}
+  
+  # Security headers
+  header {
+    X-Frame-Options "SAMEORIGIN"
+    X-Content-Type-Options "nosniff"
+    X-XSS-Protection "1; mode=block"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  }
+  
+  # CORS headers are handled by Spring Boot
+  # Caddy just proxies the requests
+  
+  # Enable compression
+  encode gzip
+}
+
+# Frontend Domain (if needed)
+${frontend_domain} {
+  root /var/www/html
+  file_server
+  try_files {path} /index.html
+}
+EOF
+
+# Create log directory
+mkdir -p /var/log/caddy
+chown -R www-data:www-data /var/log/caddy
+
+# ====== CREATE DOCKER COMPOSE FILE ======
+cat > /opt/solimus-vefa/docker-compose.yml << 'COMPOSE'
+version: '3.8'
+
+services:
+  backend:
+    image: ${backend_image}
+    container_name: solimus-vefa-backend
+    restart: always
+    ports:
+      - "127.0.0.1:${backend_port}:${backend_port}"
+    environment:
+      # Spring Boot Configuration
+      SPRING_PROFILES_ACTIVE: ${spring_profiles}
+      SERVER_PORT: ${backend_port}
+      
+      # Database Configuration (RDS)
+      SPRING_DATASOURCE_URL: jdbc:mysql://${db_host}:${db_port}/${db_name}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${db_username}
+      SPRING_DATASOURCE_PASSWORD: $DB_PASSWORD
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_JPA_SHOW_SQL: "false"
+      
+      # Storage Configuration (AWS S3 - using IAM role, no credentials needed)
+      STORAGE_TYPE: s3
+      STORAGE_BUCKET: ${s3_bucket}
+      AWS_REGION: ${aws_region}
+      STORAGE_ENDPOINT: ""
+      STORAGE_PATH_STYLE: "false"
+      
+      # Frontend URL (for CORS and redirects)
+      FRONT_URL: ${frontend_url}
+      API_URL: ${api_url}
+      
+      # Application Health Check
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info
+      
+      # Logging
+      LOGGING_LEVEL_ROOT: INFO
+      LOGGING_LEVEL_COM_WAKANA_VEFA: INFO
+    
+    # Health Check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${backend_port}/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # CloudWatch Logs
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /aws/ec2/${project}
+        awslogs-region: ${aws_region}
+        awslogs-stream-prefix: backend
+    
+    # Volume for persistent logs
+    volumes:
+      - /var/log/solimus-vefa:/var/log/solimus-vefa
+    
+    networks:
+      - solimus-vefa-network
+
+networks:
+  solimus-vefa-network:
+    driver: bridge
+COMPOSE
+
+# ====== CREATE SYSTEMD SERVICE FOR DOCKER COMPOSE ======
+cat > /etc/systemd/system/solimus-vefa-backend.service << 'SERVICE'
+[Unit]
+Description=Solimus Vefa Backend Service
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/solimus-vefa
+ExecStart=/usr/bin/docker-compose -f docker-compose.yml up
+ExecStop=/usr/bin/docker-compose -f docker-compose.yml down
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+chmod 644 /etc/systemd/system/solimus-vefa-backend.service
+systemctl daemon-reload
+systemctl enable solimus-vefa-backend
+
+# ====== SETUP CLOUDWATCH LOGS ======
+cat > /etc/awslogs/config/solimus-vefa.conf << 'AWSLOGS'
+[/aws/ec2/${project}]
+log_group_name = /aws/ec2/${project}
+log_stream_name = {instance_id}
+datetime_format = %Y-%m-%d %H:%M:%S
+file = /var/log/solimus-vefa/*.log
+AWSLOGS
+
+# ====== PULL DOCKER IMAGE AND START CONTAINER ======
+# Note: The image should already be pushed to ECR or Docker Hub
+# Adjust the image pull command based on your registry
+
+echo "Waiting for dependencies to be ready..."
+sleep 30
+
+cd /opt/solimus-vefa
+docker-compose pull
+docker-compose up -d
+
+# ====== START CADDY ======
+systemctl start caddy
+systemctl enable caddy
+
+# ====== COMPLETION ======
+echo "EC2 initialization completed at $(date)"
+echo "Backend should be accessible at https://${api_domain}"

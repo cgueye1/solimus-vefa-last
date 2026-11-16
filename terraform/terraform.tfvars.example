@@ -1,0 +1,62 @@
+# ====== Terraform Variables Example ======
+# Copy this file to terraform.tfvars and fill in your values
+# This file is EXCLUDED from git by .gitignore (contains secrets)
+
+# AWS Account ID
+account_id = "374784204755"
+
+# AWS Region
+aws_region = "eu-west-3"
+
+# Project Configuration
+project     = "solimus-vefa"
+environment = "prod"
+
+# Domain Configuration
+domain          = "vefa.solimus.sn"
+api_domain      = "api.vefa.solimus.sn"
+frontend_domain = "vefa.solimus.sn"
+
+# Network Configuration
+vpc_cidr              = "10.0.0.0/16"
+public_subnet_cidr    = "10.0.1.0/24"
+private_subnet_cidr   = "10.0.2.0/24"
+
+# Database Configuration
+# Password is automatically generated and stored in SSM Parameter Store
+db_name              = "vefa"
+db_username          = "admin"
+db_engine            = "mysql"
+db_engine_version    = "8.4"
+db_instance_class    = "db.t4g.micro"
+db_storage           = 20
+db_backup_retention  = 7
+
+# EC2 Backend Configuration
+backend_instance_type = "t3.small"
+backend_port          = 8086
+backend_image         = "solimus-vefa:latest"
+
+# Storage Configuration
+files_bucket_name    = "solimus-vefa-files"
+frontend_bucket_name = "solimus-vefa-frontend"
+
+# CloudFront Configuration
+cloudfront_ttl     = 3600
+cloudfront_min_ttl = 0
+cloudfront_max_ttl = 86400
+
+# GitHub Configuration
+github_back_repo  = "cgueye1/solimus-vefa-last"
+github_front_repo = "cgueye1/solimus-vefa-front"
+
+# Monitoring Configuration
+enable_monitoring = true
+alarm_email       = "cheikh@example.com"  # Replace with your email
+
+# Additional Tags
+tags = {
+  Owner       = "solimus"
+  CostCenter  = "engineering"
+  Confidential = "true"
+}

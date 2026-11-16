@@ -1,0 +1,55 @@
+# Terraform State & Lock Files
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+.terraform/
+
+# Terraform Variables (contains secrets)
+terraform.tfvars
+*.tfvars
+!terraform.tfvars.example
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform Backend Config
+.terraformrc
+terraform.rc
+
+# Temporary files
+*.tmp
+*.backup
+*.bak
+
+# Logs
+*.log
+
+# Build outputs
+dist/
+build/
+
+# Node modules (if using Terraform JS SDK)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python cache (if using Python modules)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Sensitive files
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
