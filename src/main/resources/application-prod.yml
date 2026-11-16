@@ -1,9 +1,8 @@
 spring:
-  profiles: prod
   application:
     name: solimus-vefa-backend
-  
-  # Database Configuration (Production - AWS RDS)
+
+  # Base de données (production - AWS RDS)
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
@@ -14,31 +13,32 @@ spring:
       connection-timeout: 30000
       idle-timeout: 900000
       max-lifetime: 1800000
-  
-  # JPA/Hibernate Configuration
+
+  # JPA / Hibernate : le schéma est géré par Flyway, Hibernate se contente de vérifier
   jpa:
     hibernate:
-      ddl-auto: validate  # NEVER use 'create-drop' or 'update' in production!
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
-        format_sql: false  # Disable in production for performance
+        format_sql: false
         generate_statistics: false
-  
+
   sql:
     init:
-      mode: never  # Don't initialize database in production
-  
-  # Flyway for database migrations (IMPORTANT FOR PRODUCTION)
+      mode: never
+
+  # Flyway : sur une base déjà remplie, marque l'état actuel comme version 1
   flyway:
     enabled: true
     baseline-on-migrate: true
+    baseline-version: 1
     locations: classpath:db/migration
-    out-of-order: false  # Strict migration ordering in prod
-  
-  # Mail Configuration
+    out-of-order: false
+
+  # Email (OVH)
   mail:
-    host: ${SPRING_MAIL_HOST}
+    host: ${SPRING_MAIL_HOST:ssl0.ovh.net}
     port: ${SPRING_MAIL_PORT:587}
     username: ${SPRING_MAIL_USERNAME}
     password: ${SPRING_MAIL_PASSWORD}
@@ -51,31 +51,25 @@ spring:
             required: true
           ssl:
             trust: ssl0.ovh.net
-  
-  # Multipart file upload
+
+  # Envoi de fichiers
   servlet:
     multipart:
-      max-file-size: 500MB  # Smaller limit for production
+      max-file-size: 500MB
       max-request-size: 500MB
-  
-  # Compression
-  compression:
-    enabled: true
-    mime-types: application/json,application/xml,text/html,text/xml,text/plain
-    min-response-size: 2048
-  
-  # Cache Configuration
+
+  # Cache
   cache:
     type: caffeine
     cache-names: properties,dashboard,stats,lists,progressAlbums
     caffeine:
-      spec: maximumSize=1000,expireAfterWrite=300s  # Longer cache in prod
-  
-  # WebSocket Configuration
+      spec: maximumSize=1000,expireAfterWrite=300s
+
+  # WebSocket
   websocket:
     path: /ws
 
-# Management/Actuator Configuration (Health Check)
+# Actuator : uniquement l'état de santé, sans détails
 management:
   endpoints:
     web:
@@ -83,53 +77,50 @@ management:
         include: health
   endpoint:
     health:
-      show-details: never  # Never expose internal details publicly
+      show-details: never
 
-# Server Configuration
+# Serveur (HTTPS géré par Caddy)
 server:
   port: ${SERVER_PORT:8086}
   forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:framework}
   compression:
     enabled: true
     mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 2048
   ssl:
-    enabled: ${SERVER_SSL_ENABLED:false}  # SSL handled by Caddy/Load Balancer
+    enabled: ${SERVER_SSL_ENABLED:false}
 
-# Logging Configuration
+# Logs : sortie console uniquement (lisibles avec docker logs)
 logging:
   level:
     root: WARN
     org.springframework.web: WARN
     org.springframework.security: INFO
     com.wakana.vefa: INFO
-  file:
-    name: /var/log/solimus-vefa/application.log
-    max-size: 10MB
-    max-history: 30
 
-# Application Configuration
+# URLs de l'application
 app:
   front-url: ${FRONT_URL:https://vefa.solimus.sn}
   api-url: ${API_URL:https://api.vefa.solimus.sn}
   payment-ipn-url: ${PAYMENT_IPN_URL:https://api.vefa.solimus.sn/api/payment/ipn}
 
-# Storage Configuration (AWS S3 for production - NO credentials, using IAM role)
+# Stockage : AWS S3 via le rôle IAM de l'instance (aucune clé)
 storage:
   type: ${STORAGE_TYPE:s3}
-  endpoint: ${STORAGE_ENDPOINT:}  # Leave empty for S3
-  path-style: ${STORAGE_PATH_STYLE:false}  # S3 uses virtual-hosted-style
-  access-key: ${STORAGE_ACCESS_KEY:}  # Leave empty - use IAM role
-  secret-key: ${STORAGE_SECRET_KEY:}  # Leave empty - use IAM role
-  bucket: ${FILES_BUCKET:solimus-vefa-files}
+  endpoint: ${STORAGE_ENDPOINT:}
+  path-style: ${STORAGE_PATH_STYLE:false}
+  access-key: ${STORAGE_ACCESS_KEY:}
+  secret-key: ${STORAGE_SECRET_KEY:}
+  bucket: ${FILES_BUCKET}
   region: ${AWS_REGION:eu-west-3}
 
-# Angular/Frontend URLs
+# URLs de retour du front (Angular)
 angular:
   url:
     success: ${ANGULAR_URL_SUCCESS:https://vefa.solimus.sn/#/settings/accounts?status=success}
     failed: ${ANGULAR_URL_FAILED:https://vefa.solimus.sn/#/settings/accounts?status=failed}
 
-# WhatsApp Configuration
+# WhatsApp
 whatsapp:
   graph:
     version: ${WHATSAPP_GRAPH_VERSION:v25.0}
@@ -142,15 +133,16 @@ whatsapp:
   test-mode: ${WHATSAPP_TEST_MODE:false}
   test-phone-number: ${WHATSAPP_TEST_PHONE_NUMBER:}
 
-# OTP Configuration
+# OTP
 otp:
   test-email: ${OTP_TEST_EMAIL:}
 
-# API Documentation (Disable in production if not needed)
+# Documentation de l'API : désactivée par défaut en production
 springdoc:
   api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
     path: /api-docs
   swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
     path: /swagger-ui.html
-    enabled: ${SWAGGER_ENABLED:true}
-    try-it-out-enabled: false  # Disable try-it-out in production
+    try-it-out-enabled: false
