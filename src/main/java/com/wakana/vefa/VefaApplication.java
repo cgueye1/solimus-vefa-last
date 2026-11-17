@@ -11,7 +11,6 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
@@ -30,7 +29,6 @@ import java.util.List;
 @OpenAPIDefinition(info = @Info(title = "VEFA", version = "1.0.0", description = "", termsOfService = "runcodeNow", contact = @Contact(name = "Wakana", email = "contactwakana@gmail.com"), license = @License(name = "Licence", url = "Solimus")), security = {
         @SecurityRequirement(name = "bearerAuth") })
 @SecurityScheme(name = "bearerAuth", type = SecuritySchemeType.HTTP, scheme = "bearer", bearerFormat = "JWT")
-@ComponentScan(basePackages = { "com.wakana.vefa.services" })
 @EnableCaching
 public class VefaApplication implements CommandLineRunner {
 

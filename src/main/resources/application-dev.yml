@@ -1,43 +1,41 @@
 spring:
-  profiles: dev
   application:
     name: solimus-vefa-backend
-  
-  # Database Configuration (Development - Dokploy)
+
+  # Base de données : tout vient de .env
   datasource:
-    url: jdbc:mysql://db:3306/vefa
-    username: solimus
-    password: ${MYSQL_PASSWORD:change-this-database-password}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
-  
-  # JPA/Hibernate Configuration
+
   jpa:
     hibernate:
-      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:none}
     show-sql: false
     properties:
       hibernate:
         format_sql: true
         use_sql_comments: true
-  
+
   sql:
     init:
       mode: ${SPRING_SQL_INIT_MODE:never}
-  
-  # Flyway for database migrations
+
   flyway:
-    enabled: true
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
     baseline-on-migrate: true
+    baseline-version: 1
     locations: classpath:db/migration
-  
-  # Mail Configuration
+
+  # Email
   mail:
-    host: ${SPRING_MAIL_HOST:smtp.example.com}
+    host: ${SPRING_MAIL_HOST:ssl0.ovh.net}
     port: ${SPRING_MAIL_PORT:587}
     username: ${SPRING_MAIL_USERNAME:}
     password: ${SPRING_MAIL_PASSWORD:}
@@ -50,75 +48,69 @@ spring:
             required: true
           ssl:
             trust: ssl0.ovh.net
-  
-  # Multipart file upload
+
   servlet:
     multipart:
       max-file-size: 3GB
       max-request-size: 3GB
-  
-  # Compression
-  compression:
-    enabled: true
-    mime-types: application/json,application/xml,text/html,text/xml,text/plain
-    min-response-size: 1024
-  
-  # Cache Configuration
+
   cache:
     type: caffeine
     cache-names: properties,dashboard,stats,lists,progressAlbums
     caffeine:
       spec: maximumSize=500,expireAfterWrite=60s
-  
-  # WebSocket Configuration
+
   websocket:
     path: /ws
 
-# Server Configuration
 server:
   port: ${SERVER_PORT:8086}
   forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:framework}
   compression:
     enabled: true
     mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
 
-# Logging Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
 logging:
   level:
     org.springframework.web: INFO
     org.springframework.security: DEBUG
     com.wakana.vefa: DEBUG
 
-# Application Configuration
 app:
   front-url: ${FRONT_URL:https://dev-vefa.solimus.sn}
   api-url: ${API_URL:https://api-dev-vefa.solimus.sn}
   payment-ipn-url: ${PAYMENT_IPN_URL:https://api-dev-vefa.solimus.sn/api/payment/ipn}
 
-# Storage Configuration (MinIO for development)
+# Stockage générique (S3 / MinIO) : en dev, on réutilise les variables MINIO_*
 storage:
   type: ${STORAGE_TYPE:minio}
-  endpoint: ${STORAGE_ENDPOINT:http://minio:9000}
+  endpoint: ${STORAGE_ENDPOINT:${MINIO_URL}}
   path-style: ${STORAGE_PATH_STYLE:true}
-  access-key: ${STORAGE_ACCESS_KEY:minioadmin}
-  secret-key: ${STORAGE_SECRET_KEY:minioadmin}
-  bucket: ${FILES_BUCKET:solimus}
+  access-key: ${STORAGE_ACCESS_KEY:${MINIO_ACCESS_KEY}}
+  secret-key: ${STORAGE_SECRET_KEY:${MINIO_SECRET_KEY}}
+  bucket: ${FILES_BUCKET:${MINIO_BUCKET}}
   region: ${AWS_REGION:eu-west-3}
 
-# MinIO Configuration
+# MinIO (utilisé par MinioService)
 minio:
-  url: ${MINIO_URL:http://minio:9000}
-  access-key: ${MINIO_ACCESS_KEY:minioadmin}
-  secret-key: ${MINIO_SECRET_KEY:minioadmin}
-  bucket: ${MINIO_BUCKET:solimus}
+  enabled: ${MINIO_ENABLED:true}
+  url: ${MINIO_URL}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
+  bucket: ${MINIO_BUCKET}
 
-# Angular/Frontend URLs
 angular:
   url:
     success: ${ANGULAR_URL_SUCCESS:https://dev-vefa.solimus.sn/#/settings/accounts?status=success}
     failed: ${ANGULAR_URL_FAILED:https://dev-vefa.solimus.sn/#/settings/accounts?status=failed}
 
-# WhatsApp Configuration
 whatsapp:
   graph:
     version: ${WHATSAPP_GRAPH_VERSION:v25.0}
@@ -131,11 +123,9 @@ whatsapp:
   test-mode: ${WHATSAPP_TEST_MODE:false}
   test-phone-number: ${WHATSAPP_TEST_PHONE_NUMBER:}
 
-# OTP Configuration
 otp:
   test-email: ${OTP_TEST_EMAIL:}
 
-# API Documentation
 springdoc:
   api-docs:
     path: /api-docs
