@@ -11,15 +11,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.wakana.vefa.services.MinioService;
+import com.wakana.vefa.services.StorageService;
 
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
 
-    private final MinioService minioService;
+    private final StorageService minioService;
 
-    public FileController(MinioService minioService) {
+    public FileController(StorageService minioService) {
         this.minioService = minioService;
     }
 

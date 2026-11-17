@@ -6,15 +6,15 @@ import java.util.List;
 
 import org.springframework.web.multipart.MultipartFile;
 
-import com.wakana.vefa.services.MinioService;
+import com.wakana.vefa.services.StorageService;
 
 public class FileTraferUtil {
 
     // ⚠️ Injecté statiquement (voir plus bas)
-    private static MinioService minioService;
+    private static StorageService minioService;
 
-    // Injecter MinioService une seule fois
-    public static void setMinioService(MinioService service) {
+    // Injecter StorageService une seule fois
+    public static void setStorageService(StorageService service) {
         minioService = service;
     }
 
