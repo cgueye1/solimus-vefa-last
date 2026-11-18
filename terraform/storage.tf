@@ -123,18 +123,13 @@ resource "aws_s3_bucket_policy" "frontend" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCloudFrontAccess"
+        Sid    = "AllowCloudFrontOAIAccess"
         Effect = "Allow"
         Principal = {
-          Service = "cloudfront.amazonaws.com"
+          AWS = aws_cloudfront_origin_access_identity.frontend.iam_arn
         }
         Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.frontend.arn}/*"
-        Condition = {
-          StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.frontend.arn
-          }
-        }
       }
     ]
   })
@@ -199,9 +194,11 @@ resource "aws_cloudfront_origin_access_identity" "files" {
 # ====== CLOUDFRONT DISTRIBUTION FOR FRONTEND ======
 
 resource "aws_cloudfront_distribution" "frontend" {
-  enabled     = true
-  comment     = "${var.project} frontend distribution"
-  price_class = "PriceClass_200" # Only US, Europe, and Asia-Pacific edge locations (cost optimization)
+  enabled             = true
+  default_root_object = "index.html"
+  comment             = "${var.project} frontend distribution"
+  price_class         = "PriceClass_200" # Only US, Europe, and Asia-Pacific edge locations (cost optimization)
+  aliases             = [var.domain]
 
   origin {
     domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -226,17 +223,25 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
 
     viewer_protocol_policy = "redirect-to-https"
+    compress               = true
     default_ttl            = 3600
     min_ttl                = 0
     max_ttl                = 86400
   }
 
-  # For SPA routing - serve index.html for missing files
+  # For SPA routing - serve index.html for missing files or access denied
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
   custom_error_response {
     error_code            = 404
     response_code         = 200
     response_page_path    = "/index.html"
-    error_caching_min_ttl = 300
+    error_caching_min_ttl = 0
   }
 
   restrictions {
@@ -246,12 +251,17 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn            = aws_acm_certificate.frontend.arn
+    ssl_support_method             = "sni-only"
+    minimum_protocol_version       = "TLSv1.2_2021"
+    cloudfront_default_certificate = false
   }
 
   tags = {
     Name = "${var.project}-frontend-cf"
   }
+
+  depends_on = [aws_acm_certificate_validation.frontend]
 }
 
 # ====== CLOUDFRONT ORIGIN ACCESS IDENTITY FOR FRONTEND ======

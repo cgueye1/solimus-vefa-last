@@ -20,27 +20,29 @@ resource "aws_route53_record" "api" {
   records = [aws_eip.backend.public_ip]
 }
 
-# ====== ROUTE 53 RECORDS FOR MAIN DOMAIN ======
+# ====== ROUTE 53 RECORDS FOR MAIN DOMAIN (via CloudFront) ======
 
-resource "aws_route53_record" "main" {
+resource "aws_route53_record" "main_a" {
   zone_id = aws_route53_zone.main.zone_id
   name    = var.domain
   type    = "A"
-  ttl     = 300
-  records = [aws_eip.backend.public_ip]
+  alias {
+    name                   = aws_cloudfront_distribution.frontend.domain_name
+    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    evaluate_target_health = false
+  }
 }
 
-# ====== ROUTE 53 RECORDS FOR FRONTEND (via CloudFront) ======
-# Note: In production, you might want to point this to CloudFront
-# For now, we're routing everything through the EC2 instance via Caddy
-
-# resource "aws_route53_record" "frontend" {
-#   zone_id = aws_route53_zone.main.zone_id
-#   name    = var.frontend_domain
-#   type    = "A"
-#   ttl     = 300
-#   records = [aws_eip.backend.public_ip]
-# }
+resource "aws_route53_record" "main_aaaa" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = var.domain
+  type    = "AAAA"
+  alias {
+    name                   = aws_cloudfront_distribution.frontend.domain_name
+    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
 
 # ====== NS RECORDS (For delegation from OVH) ======
 # These NS records should be added to OVH for the subdomain vefa.solimus.sn
