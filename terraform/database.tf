@@ -79,8 +79,9 @@ resource "aws_db_instance" "mysql" {
 # ====== RDS PARAMETER GROUP (for MySQL) ======
 
 resource "aws_db_parameter_group" "mysql" {
-  name   = "${var.project}-mysql-params"
-  family = "mysql${replace(var.db_engine_version, ".", "")}"
+  # Nom exact du groupe déjà déployé (ne pas modifier : forcerait un remplacement)
+  name   = "${var.project}-mysql-params-9786b9a6"
+  family = "mysql${var.db_engine_version}"
 
   # Connection and performance parameters
   parameter {

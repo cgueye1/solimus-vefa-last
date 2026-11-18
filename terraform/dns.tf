@@ -74,3 +74,9 @@ output "api_dns_name" {
   description = "DNS name for API domain"
   value       = aws_route53_record.api.name
 }
+
+# L'ancien enregistrement "main" (vers l'EC2) devient "main_a" (vers CloudFront)
+moved {
+  from = aws_route53_record.main
+  to   = aws_route53_record.main_a
+}
