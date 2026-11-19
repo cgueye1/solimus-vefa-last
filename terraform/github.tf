@@ -11,6 +11,29 @@ resource "aws_iam_openid_connect_provider" "github" {
   }
 }
 
+# ====== IDENTITÉ GITHUB ACCEPTÉE (claim "sub" du jeton OIDC) ======
+# GitHub envoie un "sub" avec les identifiants numériques du propriétaire et du dépôt :
+#   repo:cgueye1@200596202/solimus-vefa-front@1411667368:ref:refs/heads/prod-aws
+# Ce format protège contre l'usurpation (dépôt supprimé puis recréé sous le même nom).
+# L'ancien format (sans identifiants) reste accepté par compatibilité.
+# Seule la branche prod-aws peut déployer.
+
+locals {
+  github_owner_id      = "200596202"
+  github_front_repo_id = "1411667368"
+  github_back_repo_id  = "1411631636"
+
+  github_back_sub = [
+    "repo:${var.github_back_repo}:ref:refs/heads/prod-aws",
+    "repo:cgueye1@${local.github_owner_id}/solimus-vefa-last@${local.github_back_repo_id}:ref:refs/heads/prod-aws",
+  ]
+
+  github_front_sub = [
+    "repo:${var.github_front_repo}:ref:refs/heads/prod-aws",
+    "repo:cgueye1@${local.github_owner_id}/solimus-vefa-front@${local.github_front_repo_id}:ref:refs/heads/prod-aws",
+  ]
+}
+
 # ====== IAM ROLE FOR GITHUB ACTIONS (BACKEND) ======
 
 resource "aws_iam_role" "github_backend_role" {
@@ -30,7 +53,7 @@ resource "aws_iam_role" "github_backend_role" {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_back_repo}:ref:refs/heads/prod-aws"
+            "token.actions.githubusercontent.com:sub" = local.github_back_sub
           }
         }
       }
@@ -61,7 +84,7 @@ resource "aws_iam_role" "github_frontend_role" {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_front_repo}:ref:refs/heads/prod-aws"
+            "token.actions.githubusercontent.com:sub" = local.github_front_sub
           }
         }
       }
@@ -143,7 +166,7 @@ resource "aws_iam_role_policy" "github_frontend_policy" {
   })
 }
 
-# ====== OUTPUTS FOR GITHUB SECRETS ======
+# ====== OUTPUTS FOR GITHUB VARIABLES ======
 
 output "github_oidc_provider_arn" {
   description = "GitHub OIDC Provider ARN"
@@ -171,23 +194,24 @@ output "github_frontend_role_name" {
 }
 
 output "github_backend_setup_instructions" {
-  description = "Instructions for setting up GitHub backend"
+  description = "Variables GitHub (onglet Variables) du dépôt back"
   value = format(
-    "Add these secrets to %s GitHub repository:\n\nROLE_ARN=%s\nAWS_REGION=%s",
+    "Variables GitHub du dépôt %s :\n\nAWS_ROLE_ARN=%s\nAWS_REGION=%s\nEC2_INSTANCE_ID=%s",
     var.github_back_repo,
     aws_iam_role.github_backend_role.arn,
-    var.aws_region
+    var.aws_region,
+    aws_instance.backend.id
   )
 }
 
 output "github_frontend_setup_instructions" {
-  description = "Instructions for setting up GitHub frontend"
+  description = "Variables GitHub (onglet Variables) du dépôt front"
   value = format(
-    "Add these secrets to %s GitHub repository:\n\nROLE_ARN=%s\nS3_BUCKET=%s\nCLOUDFRONT_DISTRIBUTION_ID=%s\nAWS_REGION=%s",
+    "Variables GitHub du dépôt %s :\n\nAWS_ROLE_ARN=%s\nAWS_REGION=%s\nFRONT_BUCKET=%s\nCLOUDFRONT_ID=%s",
     var.github_front_repo,
     aws_iam_role.github_frontend_role.arn,
+    var.aws_region,
     aws_s3_bucket.frontend.id,
-    aws_cloudfront_distribution.frontend.id,
-    var.aws_region
+    aws_cloudfront_distribution.frontend.id
   )
 }
