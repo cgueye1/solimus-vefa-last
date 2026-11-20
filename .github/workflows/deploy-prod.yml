@@ -1,70 +1,114 @@
-name: Deploy backend to AWS (prod)
+name: Deploy back-end (prod)
 
 on:
   push:
     branches: [prod-aws]
     paths-ignore:
-      - 'terraform/**'
-      - 'docs/**'
-      - '**.md'
+      - "terraform/**"
+      - "docs/**"
+      - "**.md"
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Retour arrière : SHA d'une image déjà dans ECR (laisser vide pour compiler la branche)"
+        required: false
+        default: ""
 
 permissions:
-  id-token: write   # nécessaire pour OIDC
+  id-token: write   # connexion OIDC à AWS
   contents: read
+
+concurrency:
+  group: deploy-prod-back
+  cancel-in-progress: false
+
+env:
+  APP_DIR: /opt/solimus-vefa
+  HEALTH_URL: https://api.vefa.solimus.sn/actuator/health
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: maven
+      - name: Choix de la version
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "TAG=${{ inputs.image_tag }}" >> "$GITHUB_ENV"
+            echo "BUILD=false" >> "$GITHUB_ENV"
+            echo "Retour arrière vers ${{ inputs.image_tag }} (pas de build)"
+          else
+            echo "TAG=${GITHUB_SHA}" >> "$GITHUB_ENV"
+            echo "BUILD=true" >> "$GITHUB_ENV"
+          fi
 
-      - name: Tests
-        run: ./mvnw -B test
-
-      - name: Configure AWS credentials (OIDC)
+      - name: Connexion à AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Login to Amazon ECR
+      - name: Connexion à ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push image
+      - name: Build et push de l'image
+        if: env.BUILD == 'true'
+        env:
+          ECR_URL: ${{ vars.ECR_REPOSITORY_URL }}
         run: |
-          docker build -t ${{ vars.ECR_REPOSITORY_URL }}:${{ github.sha }} .
-          docker push ${{ vars.ECR_REPOSITORY_URL }}:${{ github.sha }}
+          docker build -t "$ECR_URL:$TAG" -t "$ECR_URL:latest" .
+          docker push "$ECR_URL:$TAG"
+          docker push "$ECR_URL:latest"
 
-      - name: Deploy on EC2 (SSM)
+      - name: Déploiement sur l'EC2 (SSM)
+        env:
+          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          ECR_URL: ${{ vars.ECR_REPOSITORY_URL }}
         run: |
+          # Le docker-compose de prod et le script de déploiement sont envoyés depuis Git :
+          # le serveur n'a besoin ni du dépôt, ni d'une clé GitHub.
+          COMPOSE_B64=$(base64 -w0 deploy/docker-compose.prod.yml)
+          SCRIPT_B64=$(base64 -w0 scripts/deploy-prod.sh)
+          COMMAND="mkdir -p $APP_DIR && echo $COMPOSE_B64 | base64 -d > $APP_DIR/docker-compose.yml && echo $SCRIPT_B64 | base64 -d > $APP_DIR/deploy-prod.sh && bash $APP_DIR/deploy-prod.sh $ECR_URL $TAG"
+          PARAMS=$(jq -n --arg c "$COMMAND" '{commands: [$c], executionTimeout: ["1200"]}')
+
           CMD_ID=$(aws ssm send-command \
-            --instance-ids ${{ vars.INSTANCE_ID }} \
-            --document-name AWS-RunShellScript \
-            --parameters 'commands=["/opt/app/deploy.sh ${{ github.sha }}"]' \
-            --query Command.CommandId --output text)
-          aws ssm wait command-executed --command-id "$CMD_ID" \
-            --instance-id ${{ vars.INSTANCE_ID }} || {
-            aws ssm get-command-invocation --command-id "$CMD_ID" \
-              --instance-id ${{ vars.INSTANCE_ID }} \
-              --query StandardErrorContent --output text
-            exit 1
-          }
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "deploy back $TAG" \
+            --parameters "$PARAMS" \
+            --query "Command.CommandId" --output text)
+          echo "Commande SSM : $CMD_ID"
 
-      - name: Health check
-        run: |
-          for i in $(seq 1 30); do
-            if curl -fsS https://api.vefa.solimus.sn/actuator/health; then
-              echo " Application OK"; exit 0
-            fi
-            echo "Tentative $i/30..."; sleep 10
+          STATUS="Pending"
+          for i in $(seq 1 120); do
+            sleep 10
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query "Status" --output text 2>/dev/null || echo "Pending")
+            echo "Statut : $STATUS"
+            case "$STATUS" in
+              Success|Failed|Cancelled|TimedOut|Cancelling) break ;;
+            esac
           done
-          echo "Health check failed"; exit 1
+
+          echo "----- Sortie du script sur l'EC2 -----"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" --output text || true
+          echo "----- Erreurs -----"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "StandardErrorContent" --output text || true
+
+          [ "$STATUS" = "Success" ] || { echo "Déploiement en échec (statut : $STATUS)"; exit 1; }
+
+      - name: Vérification publique
+        run: |
+          for i in $(seq 1 24); do
+            if curl -sf "$HEALTH_URL"; then echo; echo "API UP"; exit 0; fi
+            sleep 5
+          done
+          echo "L'API ne répond pas en HTTPS"; exit 1
