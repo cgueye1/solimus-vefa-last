@@ -16,6 +16,22 @@
 	<properties>
 		<java.version>21</java.version>
 	</properties>
+
+	<!-- Versions alignées : TOUS les modules AWS SDK v2 (s3, auth, sdk-core, regions…)
+	     prennent la même version. Ne jamais mettre de <version> sur une dépendance
+	     software.amazon.awssdk : changer uniquement la version du BOM ci-dessous. -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>2.26.0</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -123,11 +139,11 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
-		<!-- AWS SDK S3 v2 for file storage in production -->
+		<!-- AWS SDK S3 v2 (stockage des fichiers en production).
+		     Version fixée par le BOM (dependencyManagement) : ne pas ajouter de <version>. -->
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>s3</artifactId>
-			<version>2.23.15</version>
 		</dependency>
 		<!-- Flyway for database migration management -->
 		<dependency>
@@ -241,16 +257,7 @@
     <artifactId>openhtmltopdf-pdfbox</artifactId>
     <version>1.0.10</version>
 </dependency>
-		
-		
-	
 
-    <!-- AWS Core (pour credentials) -->
-    <dependency>
-        <groupId>software.amazon.awssdk</groupId>
-        <artifactId>auth</artifactId>
-        <version>2.26.0</version>
-    </dependency>
 	</dependencies>
 
 	<build>
