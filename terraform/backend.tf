@@ -76,7 +76,7 @@ resource "aws_iam_role_policy_attachment" "backend_ssm_policy" {
   role       = aws_iam_role.backend_ec2_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
-# 
+
 # ====== IAM INSTANCE PROFILE ======
 
 resource "aws_iam_instance_profile" "backend_ec2_profile" {
@@ -95,6 +95,31 @@ resource "aws_instance" "backend" {
   iam_instance_profile        = aws_iam_instance_profile.backend_ec2_profile.name
   associate_public_ip_address = true
   monitoring                  = true
+
+  # Protection 1 : AWS refuse toute suppression (console, CLI ou Terraform)
+  # tant que cette option est active.
+  disable_api_termination = true
+
+  # Disque système : 20 Go (8 Go saturaient pendant les builds).
+  # delete_on_termination = false : si l'instance est un jour supprimée,
+  # le disque est CONSERVÉ (et récupérable), au lieu d'être effacé avec elle.
+  root_block_device {
+    volume_size           = 20
+    volume_type           = "gp3"
+    delete_on_termination = false
+
+    tags = {
+      Name = "${var.project}-backend-root"
+    }
+  }
+
+  # IMDSv2 obligatoire (plus sûr) et 2 « sauts » : l'application, dans son conteneur
+  # Docker, peut utiliser le rôle IAM de l'instance (accès S3, SSM).
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
 
   user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tftpl", {
     project         = var.project
@@ -124,7 +149,14 @@ resource "aws_instance" "backend" {
   ]
 
   lifecycle {
-    create_before_destroy = true
+    # Protection 2 : Terraform refuse tout plan qui supprimerait ou remplacerait l'instance.
+    # Pour la supprimer volontairement un jour : retirer cette ligne ET disable_api_termination.
+    prevent_destroy = true
+
+    # Protection 3 : une nouvelle image Ubuntu (most_recent) ou une modification du script
+    # de démarrage ne déclenchent plus de remplacement. C'est ce qui a supprimé l'instance
+    # le 19/11/2026 à 23:56.
+    ignore_changes = [ami, user_data, user_data_base64]
   }
 }
 
@@ -139,25 +171,15 @@ resource "aws_eip" "backend" {
   }
 
   depends_on = [aws_internet_gateway.main]
+
+  # Protection 4 : l'IP publique (utilisée par le DNS de l'API) ne peut pas être perdue.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
-# 
-# # ====== DATA SOURCE: UBUNTU AMI ======
-# 
-# data "aws_ami" "ubuntu" {
-#   most_recent = true
-#   owners      = ["099720109477"] # Canonical
-# 
-#   filter {
-#     name   = "name"
-#     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
-#   }
-# 
-#   filter {
-#     name   = "virtualization-type"
-#     values = ["hvm"]
-#   }
-# 
+
 # ====== DATA SOURCE: UBUNTU AMI ======
+# Utilisée uniquement à la création de l'instance (voir ignore_changes ci-dessus).
 
 data "aws_ami" "ubuntu" {
   most_recent = true
